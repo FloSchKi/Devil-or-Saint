@@ -126,6 +126,7 @@ public class CameraSourcePreview extends ViewGroup {
         // Swap width and height sizes when in portrait, since it will be rotated 90 degrees
         if (isPortraitMode()) {
             int tmp = width;
+            //noinspection SuspiciousNameCombination
             width = height;
             height = tmp;
         }
@@ -138,7 +139,7 @@ public class CameraSourcePreview extends ViewGroup {
         int childHeight = (int)(((float) layoutWidth / (float) width) * height);
 
         // If height is too tall using fit width, does fit height instead.
-        if (childHeight > layoutHeight) {
+        if (isPortraitMode()) {
             childHeight = layoutHeight;
             childWidth = (int)(((float) layoutHeight / (float) height) * width);
         }
