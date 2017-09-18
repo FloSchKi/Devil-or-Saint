@@ -4,6 +4,7 @@ package com.schulz_kittler.florian.devil_or_saint.camera;
  * Created by Schulz on 26.06.2017.
  */
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.util.AttributeSet;
@@ -22,6 +23,7 @@ public class CameraSourcePreview extends ViewGroup {
 
     private Context mContext;
     private SurfaceView mSurfaceView;
+    /*private AutoFitTextureView mAutoFitTextureView;*/
     private boolean mStartRequested;
     private boolean mSurfaceAvailable;
     private CameraSource mCameraSource;
@@ -37,6 +39,13 @@ public class CameraSourcePreview extends ViewGroup {
         mSurfaceView = new SurfaceView(context);
         mSurfaceView.getHolder().addCallback(new SurfaceCallback());
         addView(mSurfaceView);
+        /*mAutoFitTextureView = new AutoFitTextureView(context);
+        mAutoFitTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+        addView(mAutoFitTextureView);*/
+    }
+
+    public SurfaceView getSurfaceView() {
+        return mSurfaceView;
     }
 
     public void start(CameraSource cameraSource) throws IOException {
@@ -70,9 +79,11 @@ public class CameraSourcePreview extends ViewGroup {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private void startIfReady() throws IOException {
         if (mStartRequested && mSurfaceAvailable) {
             mCameraSource.start(mSurfaceView.getHolder());
+            /*mCameraSource.start(mAutoFitTextureView);*/
             if (mOverlay != null) {
                 Size size = mCameraSource.getPreviewSize();
                 int min = Math.min(size.getWidth(), size.getHeight());
@@ -111,7 +122,31 @@ public class CameraSourcePreview extends ViewGroup {
         }
     }
 
-    @Override
+    /*private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
+            mSurfaceAvailable = true;
+            mOverlay.bringToFront();
+            try {
+                startIfReady();
+            } catch (IOException e) {
+                Log.e(TAG, "Could not start camera source.", e);
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {}
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            mSurfaceAvailable = false;
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {}
+    };*/
+
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         int width = 320;
         int height = 240;

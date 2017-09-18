@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/topLayout"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/baseLayout"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -10,7 +11,8 @@
     <com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview
         android:id="@+id/preview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:layout_weight="1">
 
         <com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay
             android:id="@+id/faceOverlay"
@@ -18,7 +20,6 @@
             android:layout_height="match_parent" />
 
     </com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview>
-
 </LinearLayout>
 <!--<android.support.design.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"

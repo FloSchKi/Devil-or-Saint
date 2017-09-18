@@ -7,25 +7,43 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CaptureRequest;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.SparseIntArray;
+import android.view.Surface;
+import android.view.SurfaceView;
 import android.view.View;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.vision.CameraSource;
+import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
+import com.google.android.gms.vision.face.LargestFaceFocusingProcessor;
 import com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview;
 import com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
 
 /**
  * Activity for the face tracker app.  This app detects faces with the rear facing camera, and draws
@@ -33,16 +51,29 @@ import java.io.IOException;
  */
 public final class MainActivity extends AppCompatActivity {
 
-    private static final String TAG = "FaceTracker";
+    private static final String TAG = "MainActivity";
 
     private CameraSource mCameraSource = null;
-
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
+    private SurfaceView cspSurfaceView;
+    private CameraDevice cameraDevice;
+    private CaptureRequest.Builder captureRequestBuilder;
+    private CameraCaptureSession cameraCaptureSession;
 
     private static final int RC_HANDLE_GMS = 9001;
     // permission request codes need to be < 256
-    private static final int RC_HANDLE_CAMERA_PERM = 2;
+    private static final int REQUEST_CAMERA = 1;
+    private static final int REQUEST_CAMERA_STORAGE_PERM = 2;
+
+    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+    static
+    {
+        ORIENTATIONS.append(Surface.ROTATION_0,90);
+        ORIENTATIONS.append(Surface.ROTATION_90,0);
+        ORIENTATIONS.append(Surface.ROTATION_180,270);
+        ORIENTATIONS.append(Surface.ROTATION_270,180);
+    }
 
     //==============================================================================================
     // Activity Methods
@@ -59,13 +90,15 @@ public final class MainActivity extends AppCompatActivity {
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
 
+        cspSurfaceView = mPreview.getSurfaceView();
+
         // Check for the camera permission before accessing the camera.  If the
         // permission is not granted yet, request permission.
-        int rc = ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
-        if (rc == PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
             createCameraSource();
         } else {
-            requestCameraPermission();
+            requestAllPermissions();
         }
     }
 
@@ -74,14 +107,15 @@ public final class MainActivity extends AppCompatActivity {
      * showing a "Snackbar" message of why the permission is needed then
      * sending the request.
      */
-    private void requestCameraPermission() {
-        Log.w(TAG, "Camera permission is not granted. Requesting permission");
+    private void requestAllPermissions() {
+        Log.w(TAG, "Camera or Storage permission is not granted. Requesting permissions");
 
-        final String[] permissions = new String[]{Manifest.permission.CAMERA};
+        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
         if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
-                Manifest.permission.CAMERA)) {
-            ActivityCompat.requestPermissions(this, permissions, RC_HANDLE_CAMERA_PERM);
+                Manifest.permission.CAMERA) || !ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            ActivityCompat.requestPermissions(this, permissions, REQUEST_CAMERA_STORAGE_PERM);
             return;
         }
 
@@ -91,11 +125,11 @@ public final class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 ActivityCompat.requestPermissions(thisActivity, permissions,
-                        RC_HANDLE_CAMERA_PERM);
+                        REQUEST_CAMERA_STORAGE_PERM);
             }
         };
 
-        Snackbar.make(mGraphicOverlay, R.string.permission_camera_rationale,
+        Snackbar.make(mGraphicOverlay, R.string.permission_camera_storage_rationale,
                 Snackbar.LENGTH_INDEFINITE)
                 .setAction(R.string.ok, listener)
                 .show();
@@ -111,11 +145,15 @@ public final class MainActivity extends AppCompatActivity {
         Context context = getApplicationContext();
         FaceDetector detector = new FaceDetector.Builder(context)
                 .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
+                .setProminentFaceOnly(true)
+                .setTrackingEnabled(true)
                 .build();
 
-        detector.setProcessor(
+        detector.setProcessor(new LargestFaceFocusingProcessor(detector, new FaceTracker()));
+
+        /*detector.setProcessor(
                 new MultiProcessor.Builder<>(new GraphicFaceTrackerFactory())
-                        .build());
+                        .build());*/
 
         if (!detector.isOperational()) {
             // Note: The first time that an app using face API is installed on a device, GMS will
@@ -185,33 +223,65 @@ public final class MainActivity extends AppCompatActivity {
      */
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode != RC_HANDLE_CAMERA_PERM) {
-            Log.d(TAG, "Got unexpected permission result: " + requestCode);
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            return;
-        }
+        switch(requestCode) {
+            /*case REQUEST_CAMERA: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length != 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // permission granted
+                    Log.d(TAG, "Storage permission granted!");
+                } else {
 
-        if (grantResults.length != 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "Camera permission granted - initialize the camera source");
-            // we have permission, so create the camerasource
-            createCameraSource();
-            return;
-        }
+                    // permission denied
+                    Log.d(TAG, "Storage permission denied!");
+                }
+                return;
+            }*/
+            case REQUEST_CAMERA_STORAGE_PERM: {
+                Map<String, Integer> perms = new HashMap<String, Integer>();
+                perms.put(Manifest.permission.CAMERA, PackageManager.PERMISSION_GRANTED);
+                perms.put(Manifest.permission.WRITE_EXTERNAL_STORAGE, PackageManager.PERMISSION_GRANTED);
 
-        Log.e(TAG, "Permission not granted: results len = " + grantResults.length +
-                " Result code = " + (grantResults.length > 0 ? grantResults[0] : "(empty)"));
+                for(int i = 0; i < permissions.length; i++) {
+                    perms.put(permissions[i], grantResults[i]);
+                }
 
-        DialogInterface.OnClickListener listener = new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int id) {
-                finish();
+                if(perms.get(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        && perms.get(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+
+                    createCameraSource();
+                } else {
+
+                    Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT).show();
+                }
+
+                /*if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.d(TAG, "Camera permission granted - initialize the camera source");
+                    // we have permission, so create the camerasource
+                    createCameraSource();
+                } else {
+                    Log.e(TAG, "Permission not granted: results len = " + grantResults.length +
+                            " Result code = " + (grantResults.length > 0 ? grantResults[0] : "(empty)"));
+
+                    DialogInterface.OnClickListener listener = new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            finish();
+                        }
+                    };
+
+                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                    builder.setTitle("Face Tracker sample")
+                            .setMessage(R.string.no_camera_permission)
+                            .setPositiveButton(R.string.ok, listener)
+                            .show();
+                }
+                return;*/
             }
-        };
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Face Tracker sample")
-                .setMessage(R.string.no_camera_permission)
-                .setPositiveButton(R.string.ok, listener)
-                .show();
+            default: {
+                Log.d(TAG, "Got unexpected permission result: " + requestCode);
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            }
+        }
     }
 
     //==============================================================================================
@@ -242,6 +312,80 @@ public final class MainActivity extends AppCompatActivity {
                 mCameraSource.release();
                 mCameraSource = null;
             }
+        }
+    }
+
+    private void SaveImage(Bitmap finalBitmap) {
+
+        String root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).toString();
+        File myDir = new File(root + "/Devil_or_Saint");
+        myDir.mkdirs();
+        Random generator = new Random();
+        int n = 10000;
+        n = generator.nextInt(n);
+        String fname = "DoS-"+ n +".jpg";
+        File file = new File (myDir, fname);
+        if (file.exists ()) file.delete ();
+        try {
+            FileOutputStream out = new FileOutputStream(file);
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
+            out.flush();
+            out.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public  boolean isStoragePermissionGranted() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED) {
+                Log.v(TAG,"Permission is granted");
+                return true;
+            } else {
+
+                Log.v(TAG,"Permission is revoked");
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);
+                return false;
+            }
+        }
+        else { //permission is automatically granted on sdk<23 upon installation
+            Log.v(TAG,"Permission is granted");
+            return true;
+        }
+    }
+
+    //==============================================================================================
+    // My Face Tracker
+    //==============================================================================================
+
+
+    public class FaceTracker extends Tracker<Face> {
+        private int count = 0;
+        @Override
+        public void onNewItem(int faceId, Face item) {
+            //capture image if new Face is detected
+            Log.d(TAG, "--- takePicture() ---");
+            takePicture();
+        }
+
+        @Override
+        public void onUpdate(Detector.Detections<Face> detections, Face face) {
+
+        }
+
+        public void takePicture() {
+            mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] bytes) {
+                    Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
+                    if(isStoragePermissionGranted()){
+                        SaveImage(bmp);
+                    }
+                }
+            });
         }
     }
 
