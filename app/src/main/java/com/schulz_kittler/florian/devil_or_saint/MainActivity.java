@@ -2,10 +2,8 @@ package com.schulz_kittler.florian.devil_or_saint;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -38,6 +36,7 @@ import com.google.android.gms.vision.face.LargestFaceFocusingProcessor;
 import com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview;
 import com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay;
 
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -65,6 +64,7 @@ public final class MainActivity extends AppCompatActivity {
     // permission request codes need to be < 256
     private static final int REQUEST_CAMERA = 1;
     private static final int REQUEST_CAMERA_STORAGE_PERM = 2;
+    private static final String PYTHON_SERVER_URL = "http://schulz.pythonanywhere.com/bafacerec";
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static
@@ -208,11 +208,9 @@ public final class MainActivity extends AppCompatActivity {
     /**
      * Callback for the result from requesting permissions. This method
      * is invoked for every call on {@link #requestPermissions(String[], int)}.
-     * <p>
-     * <strong>Note:</strong> It is possible that the permissions request interaction
+     * Note: It is possible that the permissions request interaction
      * with the user is interrupted. In this case you will receive empty permissions
      * and results arrays which should be treated as a cancellation.
-     * </p>
      *
      * @param requestCode  The request code passed in {@link #requestPermissions(String[], int)}.
      * @param permissions  The requested permissions. Never null.
@@ -381,9 +379,11 @@ public final class MainActivity extends AppCompatActivity {
                 public void onPictureTaken(byte[] bytes) {
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
-                    if(isStoragePermissionGranted()){
+
+
+                    /*if(isStoragePermissionGranted()){
                         SaveImage(bmp);
-                    }
+                    }*/
                 }
             });
         }
