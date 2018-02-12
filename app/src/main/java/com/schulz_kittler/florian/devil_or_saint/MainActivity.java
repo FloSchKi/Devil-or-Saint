@@ -110,11 +110,12 @@ public final class MainActivity extends AppCompatActivity {
     private void requestAllPermissions() {
         Log.w(TAG, "Camera or Storage permission is not granted. Requesting permissions");
 
-        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
+        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.INTERNET};
 
         if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
                 Manifest.permission.CAMERA) || !ActivityCompat.shouldShowRequestPermissionRationale(this,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) || !ActivityCompat.shouldShowRequestPermissionRationale(this,
+                Manifest.permission.INTERNET)) {
             ActivityCompat.requestPermissions(this, permissions, REQUEST_CAMERA_STORAGE_PERM);
             return;
         }
@@ -239,13 +240,15 @@ public final class MainActivity extends AppCompatActivity {
                 Map<String, Integer> perms = new HashMap<String, Integer>();
                 perms.put(Manifest.permission.CAMERA, PackageManager.PERMISSION_GRANTED);
                 perms.put(Manifest.permission.WRITE_EXTERNAL_STORAGE, PackageManager.PERMISSION_GRANTED);
+                perms.put(Manifest.permission.INTERNET, PackageManager.PERMISSION_GRANTED);
 
                 for(int i = 0; i < permissions.length; i++) {
                     perms.put(permissions[i], grantResults[i]);
                 }
 
                 if(perms.get(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                        && perms.get(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                        && perms.get(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                        && perms.get(Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
 
                     createCameraSource();
                 } else {
@@ -380,6 +383,7 @@ public final class MainActivity extends AppCompatActivity {
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
 
+                    new UploadFileToServer().execute(bmp);
 
                     /*if(isStoragePermissionGranted()){
                         SaveImage(bmp);
