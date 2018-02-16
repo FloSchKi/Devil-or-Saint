@@ -136,31 +136,30 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Connection", "Keep-Alive");
 
-            Log.d(TAG, "Async Beginn");
+            Log.d(TAG, "**AsyncTask** - MultipartEntity wird erstellt.");
             MultipartEntity entity = new MultipartEntity(
                     HttpMultipartMode.BROWSER_COMPATIBLE);
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             bit.compress(Bitmap.CompressFormat.JPEG, 100, bos);
             byte[] data = bos.toByteArray();
-            ByteArrayBody bab = new ByteArrayBody(data, "test.jpg");
-            entity.addPart("file", bab);
+            ByteArrayBody bab = new ByteArrayBody(data, "face.jpg");
+            entity.addPart("face", bab);
+            Log.d(TAG, "**AsyncTask** - Bild wurde zum POST hinzugefügt.");
 
             conn.addRequestProperty("Content-length", entity.getContentLength() + "");
             conn.addRequestProperty(entity.getContentType().getName(), entity.getContentType().getValue());
 
-            Log.d(TAG, "Async vor POST");
             OutputStream os = conn.getOutputStream();
             entity.writeTo(conn.getOutputStream());
+            Log.d(TAG, "**AsyncTask** - POST wurde gesendet.");
             os.close();
             conn.connect();
 
             Scanner sc = new Scanner(conn.getInputStream());
-
             resultStr = sc.nextLine();
 
             //resultStr = conn.getResponseMessage();
-            Log.d(TAG, "Async Response: " + resultStr);
 
             sc.close();
 
@@ -174,6 +173,6 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
-        Log.d(TAG, "PostExecute --- Response: " + result);
+        Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result);
     }
 }

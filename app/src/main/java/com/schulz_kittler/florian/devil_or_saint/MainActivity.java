@@ -7,6 +7,13 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Point;
+import android.graphics.PointF;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CaptureRequest;
@@ -19,6 +26,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.util.SparseIntArray;
+import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.View;
@@ -32,6 +40,7 @@ import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
+import com.google.android.gms.vision.face.Landmark;
 import com.google.android.gms.vision.face.LargestFaceFocusingProcessor;
 import com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview;
 import com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay;
@@ -55,16 +64,16 @@ public final class MainActivity extends AppCompatActivity {
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
-    private SurfaceView cspSurfaceView;
-    private CameraDevice cameraDevice;
-    private CaptureRequest.Builder captureRequestBuilder;
-    private CameraCaptureSession cameraCaptureSession;
+    //private SurfaceView cspSurfaceView;
+    //private CameraDevice cameraDevice;
+    //private CaptureRequest.Builder captureRequestBuilder;
+    //private CameraCaptureSession cameraCaptureSession;
 
     private static final int RC_HANDLE_GMS = 9001;
     // permission request codes need to be < 256
     private static final int REQUEST_CAMERA = 1;
     private static final int REQUEST_CAMERA_STORAGE_PERM = 2;
-    private static final String PYTHON_SERVER_URL = "http://schulz.pythonanywhere.com/bafacerec";
+    //private static final String PYTHON_SERVER_URL = "http://schulz.pythonanywhere.com/bafacerec";
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static
@@ -90,7 +99,7 @@ public final class MainActivity extends AppCompatActivity {
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
 
-        cspSurfaceView = mPreview.getSurfaceView();
+        //cspSurfaceView = mPreview.getSurfaceView();
 
         // Check for the camera permission before accessing the camera.  If the
         // permission is not granted yet, request permission.
@@ -146,6 +155,7 @@ public final class MainActivity extends AppCompatActivity {
         Context context = getApplicationContext();
         FaceDetector detector = new FaceDetector.Builder(context)
                 .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
+                .setLandmarkType(FaceDetector.ALL_LANDMARKS)
                 .setProminentFaceOnly(true)
                 .setTrackingEnabled(true)
                 .build();
@@ -361,35 +371,148 @@ public final class MainActivity extends AppCompatActivity {
     // My Face Tracker
     //==============================================================================================
 
-
     public class FaceTracker extends Tracker<Face> {
+        private GraphicOverlay mOverlay = mGraphicOverlay;
+        private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
         private int count = 0;
         @Override
         public void onNewItem(int faceId, Face item) {
+            mGraphicOverlay.setId(faceId);
             //capture image if new Face is detected
-            Log.d(TAG, "--- takePicture() ---");
-            takePicture();
+            //Log.d(TAG, "--- takePicture() ---");
+            /*if (count < 1) {
+                count++;
+                takePicture(item);
+            }*/
         }
 
         @Override
         public void onUpdate(Detector.Detections<Face> detections, Face face) {
+            boolean leftEye = false;
+            boolean rightEye = false;
+            for (Landmark landmark : face.getLandmarks()) {
+                if(landmark.getType() == Landmark.LEFT_EYE) {
+                    leftEye = true;
+                }
+                if(landmark.getType() == Landmark.RIGHT_EYE) {
+                    rightEye = true;
+                }
+            }
 
+            if (count < 1 && leftEye && rightEye) {
+                count++;
+                mOverlay.add(mFaceGraphic);
+                takePicture(face);
+                mFaceGraphic.updateFace(face);
+            }
         }
 
-        public void takePicture() {
+        /**
+         * Hide the graphic when the corresponding face was not detected.  This can happen for
+         * intermediate frames temporarily (e.g., if the face was momentarily blocked from
+         * view).
+         */
+        @Override
+        public void onMissing(FaceDetector.Detections<Face> detectionResults) {
+            mOverlay.remove(mFaceGraphic);
+        }
+
+        /**
+         * Called when the face is assumed to be gone for good. Remove the graphic annotation from
+         * the overlay.
+         */
+        @Override
+        public void onDone() {
+            mOverlay.remove(mFaceGraphic);
+        }
+
+        /**
+         * Takes a picture of the current Frame.
+         *
+         * @param face The detected Face with Landmarks
+         */
+        public void takePicture(final Face face) {
+            final Face item = face;
             mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    Bitmap mutableBitmap = bmp.copy(Bitmap.Config.ARGB_8888,true);
+                    onPause();
+                    Canvas canvas = new Canvas(mutableBitmap);
+                    mPreview.getSurfaceView().draw(canvas);
+
+                    //bmp = rotateClockBitmap(bmp, 90);
+                    //Bitmap grayFace = grayFaceBitmap(bmp, face);
                     Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
 
-                    new UploadFileToServer().execute(bmp);
+                    //new UploadFileToServer().execute(bmp);
 
-                    /*if(isStoragePermissionGranted()){
-                        SaveImage(bmp);
-                    }*/
                 }
             });
+        }
+
+        /**
+         *
+         * @param original  Bitmap of a picture taken by the camera.
+         * @param degrees   degrees by which the picture is rotated clockwise.
+         * @return          rotated bitmap is returned.
+         */
+        public Bitmap rotateClockBitmap(Bitmap original, float degrees) {
+            int width = original.getWidth();
+            int height = original.getHeight();
+
+            Matrix matrix = new Matrix();
+            matrix.postRotate(degrees);
+
+            Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
+            Bitmap rotatedBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight(), matrix, true);
+            /*Canvas canvas = new Canvas(rotatedBitmap);
+            canvas.drawBitmap(original, 0.0f, 0.0f, null);*/
+
+            return rotatedBitmap;
+        }
+
+        public Bitmap grayFaceBitmap(Bitmap original, Face face) {
+            float bitWidth = original.getWidth();
+            float bitHeight = original.getHeight();
+            int dispWidth = 480;
+            int dispHeight = 640;
+
+            float scaleX = bitWidth/dispWidth;
+            float scaleY = bitHeight/dispHeight;
+            float widthScaled = face.getWidth()*scaleX;
+            float heightScaled = face.getHeight()*scaleY;
+            int x = Math.round(face.getPosition().x);
+            int y = Math.round(face.getPosition().y);
+            int wCrop = 0;
+            int hCrop = 0;
+            if (x < 0) {
+                wCrop = Math.round(widthScaled - x);
+                x=0;
+            } else {
+                wCrop = Math.round(widthScaled);
+            }
+            if (y < 0) {
+                hCrop = Math.round(heightScaled - y);
+                y=0;
+            } else {
+                hCrop = Math.round(heightScaled);
+            }
+
+            Log.d("BITMAP", "GrayFace --- x: " + x + " y: " + y + " scaled: width x height: " + widthScaled + "x" + heightScaled);
+            Bitmap grayFaceImage = Bitmap.createBitmap(original, x, y, wCrop, hCrop);
+
+            /*Bitmap grayFaceImage = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.RGB_565);
+            Canvas c = new Canvas(grayFaceImage);
+            Paint paint = new Paint();
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(0);
+            ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
+            paint.setColorFilter(f);
+            c.drawBitmap(original, 0, 0, paint);*/
+
+            return grayFaceImage;
         }
     }
 
@@ -418,7 +541,7 @@ public final class MainActivity extends AppCompatActivity {
 
         GraphicFaceTracker(GraphicOverlay overlay) {
             mOverlay = overlay;
-            mFaceGraphic = new FaceGraphic(overlay);
+            mFaceGraphic = new FaceGraphic(overlay, getApplicationContext());
         }
 
         /**
@@ -457,45 +580,4 @@ public final class MainActivity extends AppCompatActivity {
             mOverlay.remove(mFaceGraphic);
         }
     }
-    /*@Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);*/
-
-        /*Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-
-       FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });*/
-
-
-    }
-
-    /*@Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }*/
-
-    /*@Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }*/
-//}
+}
