@@ -11,7 +11,7 @@
     <com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview
         android:id="@+id/preview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         android:layout_weight="1">
 
         <com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay
@@ -20,6 +20,37 @@
             android:layout_height="match_parent" />
 
     </com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:background="@android:color/black"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnDevil"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"
+            android:background="@android:color/holo_red_light"
+            android:onClick="onClickDevil"
+            android:text="@string/rbtnDevil" />
+
+        <Space
+            android:layout_width="95dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0" />
+
+        <Button
+            android:id="@+id/btnSaint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"
+            android:background="@android:color/holo_orange_light"
+            android:onClick="onClickSaint"
+            android:text="@string/rbtnSaint" />
+    </LinearLayout>
 </LinearLayout>
 <!--<android.support.design.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"

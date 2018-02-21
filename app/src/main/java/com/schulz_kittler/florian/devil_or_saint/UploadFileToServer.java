@@ -1,8 +1,14 @@
 package com.schulz_kittler.florian.devil_or_saint;
 
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.util.Log;
+import android.view.View;
+import android.widget.ProgressBar;
+
+import com.google.android.gms.vision.face.Face;
 
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntity;
@@ -20,6 +26,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by Schulz on 12.02.2018.
@@ -27,108 +34,30 @@ import java.util.Scanner;
 
 class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
     private static final String TAG = "UploadFileToServer";
+    private Context mainContext;
+    private ProgressDialog mDialog;
+    private FaceGraphic fGraphic;
+    private Face face;
+    private String id;
+
+    public UploadFileToServer(Context context, FaceGraphic faceG, Face faceIn, String iID) {
+        mainContext = context;
+        fGraphic = faceG;
+        face = faceIn;
+        id = iID;
+    }
+
+    @Override
+    protected void onPreExecute() {
+        mDialog = new ProgressDialog(mainContext);
+        mDialog.setMessage("Processing Image...");
+        mDialog.show();
+    }
 
     @Override
     protected String doInBackground(Bitmap... image) {
-        /*String attachmentName = "bitmap";
-        String attachmentFileName = "bitmap.bmp";
-        String crlf = "\r\n";
-        String twoHyphens = "--";
-        String boundary =  "*****";*/
         String resultStr = null;
         Bitmap bit = image[0];
-
-        /*try {
-            Log.d(TAG, "Async Try Statement");
-            HttpURLConnection httpUrlConnection = null;
-            URL url = new URL("http://schulz.pythonanywhere.com/bafacerec");
-            httpUrlConnection = (HttpURLConnection) url.openConnection();
-            httpUrlConnection.setUseCaches(false);
-            httpUrlConnection.setDoOutput(true);
-
-            Log.d(TAG, "**!!** - 1");
-            httpUrlConnection.setRequestMethod("POST");
-            httpUrlConnection.setRequestProperty("Connection", "Keep-Alive");
-            httpUrlConnection.setRequestProperty("Cache-Control", "no-cache");
-            httpUrlConnection.setRequestProperty(
-                    "Content-Type", "multipart/form-data;boundary=" + boundary);
-
-            Log.d(TAG, "**!!** - 2");
-            DataOutputStream request = new DataOutputStream(
-                    httpUrlConnection.getOutputStream());
-
-            request.writeBytes(twoHyphens + boundary + crlf);
-            request.writeBytes("Content-Disposition: form-data; name=\"" +
-                    attachmentName + "\";filename=\"" +
-                    attachmentFileName + "\"" + crlf);
-            request.writeBytes(crlf);
-
-            Log.d(TAG, "**!!** - 3");
-            //I want to send only 8 bit black & white bitmaps
-            byte[] pixels = new byte[bit.getWidth() * bit.getHeight()];
-            for (int i = 0; i < bit.getWidth(); ++i) {
-                for (int j = 0; j < bit.getHeight(); ++j) {
-                    //we're interested only in the MSB of the first byte,
-                    //since the other 3 bytes are identical for B&W images
-                    pixels[i + j] = (byte) ((bit.getPixel(i, j) & 0x80) >> 7);
-                }
-            }
-            request.write(pixels);
-            Log.d(TAG, "**!!** - 3,5");
-            request.writeBytes(crlf);
-            request.writeBytes(twoHyphens + boundary +
-                    twoHyphens + crlf);
-
-            Log.d(TAG, "**!!** - 4");
-            request.flush();
-            request.close();
-
-            InputStream responseStream = new
-                    BufferedInputStream(httpUrlConnection.getInputStream());
-
-            BufferedReader responseStreamReader =
-                    new BufferedReader(new InputStreamReader(responseStream));
-
-            String line = "";
-            StringBuilder stringBuilder = new StringBuilder();
-
-            while ((line = responseStreamReader.readLine()) != null) {
-                stringBuilder.append(line).append("\n");
-            }
-            responseStreamReader.close();
-
-            resultStr = stringBuilder.toString();
-            Log.d(TAG, "Response: " + resultStr);
-
-            responseStream.close();
-            httpUrlConnection.disconnect();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }*/
-
-        /*try {
-            Log.d(TAG, "Async Try Statement");
-            URL url = new URL("http://schulz.pythonanywhere.com/bafacerec");
-            HttpURLConnection c = (HttpURLConnection) url.openConnection();
-            c.setDoInput(true);
-            c.setRequestMethod("POST");
-            c.setDoOutput(true);
-            c.connect();
-            Log.d(TAG, "Async After Connect");
-            OutputStream output = c.getOutputStream();
-            bit.compress(Bitmap.CompressFormat.JPEG, 100, output);
-            output.close();
-            Log.d(TAG, "Async POST done!");
-            Scanner result = new Scanner(c.getResponseMessage());
-            String response = result.nextLine();
-            Log.d(TAG, "Async " + response);
-            result.close();
-            resultStr = response;
-        } catch (IOException e) {
-            Log.e(TAG, "Error uploading image", e);
-        }*/
-
 
         try {
             URL url = new URL("http://schulz.pythonanywhere.com/bafacerec");
@@ -141,10 +70,12 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
                     HttpMultipartMode.BROWSER_COMPATIBLE);
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            bit.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+            //bit.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+            bit.compress(Bitmap.CompressFormat.PNG, 0, bos);
             byte[] data = bos.toByteArray();
-            ByteArrayBody bab = new ByteArrayBody(data, "face.jpg");
+            ByteArrayBody bab = new ByteArrayBody(data, "face.png");
             entity.addPart("face", bab);
+            entity.addPart("iid", new StringBody(id));
             Log.d(TAG, "**AsyncTask** - Bild wurde zum POST hinzugefügt.");
 
             conn.addRequestProperty("Content-length", entity.getContentLength() + "");
@@ -156,12 +87,18 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             os.close();
             conn.connect();
 
-            Scanner sc = new Scanner(conn.getInputStream());
+            if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                Log.d(TAG, "**AsyncTask** - HTTP_OK");
+                return readStream(conn.getInputStream());
+            } else {
+                Log.d(TAG, "**AsyncTask** - HTTP_CODE: " + conn.getResponseCode() + "| Message: " + conn.getResponseMessage());
+                return "Error HTTP_CODE";
+            }
+
+            /*Scanner sc = new Scanner(conn.getInputStream());
             resultStr = sc.nextLine();
 
-            //resultStr = conn.getResponseMessage();
-
-            sc.close();
+            sc.close();*/
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -171,8 +108,68 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         return resultStr;
     }
 
+    private String readStream(InputStream in) {
+        BufferedReader reader = null;
+        StringBuilder builder = new StringBuilder();
+        try {
+            reader = new BufferedReader(new InputStreamReader(in));
+            String line = "";
+            while ((line = reader.readLine()) != null) {
+                builder.append(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return builder.toString();
+    }
+
     @Override
     protected void onPostExecute(String result) {
-        Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result);
+        int dos = 0;
+        int vote = 3;
+        String faceID = "";
+        if (result == null) {
+            mDialog.setMessage("String returned NULL");
+            Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Null");
+            try {
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        else if (result.contains("Error")) {
+            mDialog.setMessage("An Error occured during Face Recognition!");
+            Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Error" + result);
+            try {
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        } else {
+            try {
+                String[] output = result.split(", ");
+                dos = Integer.parseInt(output[2]);
+                vote = Integer.parseInt(output[1]);
+                faceID = output[0];
+
+                MainActivity main = (MainActivity) mainContext;
+                main.setButtonVariable(faceID);
+                fGraphic.setDevilOrSaint(dos);
+                fGraphic.updateFace(face);
+                main.changeButtonStatus(vote);
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+            }
+        }
+        mDialog.dismiss();
+        Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result); // + ", " + String.valueOf(myNum));
     }
 }

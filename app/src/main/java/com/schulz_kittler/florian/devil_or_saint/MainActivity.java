@@ -4,22 +4,28 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
+import android.hardware.Camera;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CaptureRequest;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
@@ -30,10 +36,13 @@ import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.iid.InstanceID;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.MultiProcessor;
@@ -52,6 +61,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Activity for the face tracker app.  This app detects faces with the rear facing camera, and draws
@@ -64,6 +74,10 @@ public final class MainActivity extends AppCompatActivity {
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
+    private Button bDevil;
+    private Button bSaint;
+    private String rsFaceID;
+    private String instanceID;
     //private SurfaceView cspSurfaceView;
     //private CameraDevice cameraDevice;
     //private CaptureRequest.Builder captureRequestBuilder;
@@ -98,6 +112,17 @@ public final class MainActivity extends AppCompatActivity {
 
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
+        bDevil = (Button) findViewById(R.id.btnDevil);
+        bSaint = (Button) findViewById(R.id.btnSaint);
+        bDevil.setEnabled(false);
+        bDevil.setClickable(false);
+        bSaint.setEnabled(false);
+        bSaint.setClickable(false);
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
+
+        instanceID = InstanceID.getInstance(getApplicationContext()).getId();
+        //instanceID = "abcdefghij2";
 
         //cspSurfaceView = mPreview.getSurfaceView();
 
@@ -109,6 +134,67 @@ public final class MainActivity extends AppCompatActivity {
         } else {
             requestAllPermissions();
         }
+    }
+
+    /**
+     * Executes this method if the Devil Button is clicked
+     * @param view
+     */
+    public void onClickDevil(View view) {
+        new UploadVote(rsFaceID, instanceID, "1").execute();
+        changeButtonStatus(1);
+    }
+
+    /**
+     * Executes this method if the Saint Button is clicked
+     * @param view
+     */
+    public void onClickSaint(View view) {
+        new UploadVote(rsFaceID, instanceID, "2").execute();
+        changeButtonStatus(2);
+    }
+
+    /**
+     * Enables or disables the two Buttons and sets the previously selected button
+     * @param vote can only have four different values:
+     *             0 = face not rated previously
+     *             1 = face rated with devil previously
+     *             2 = face rated with saint previously
+     *             3 = error
+     */
+    public void changeButtonStatus(Integer vote) {
+        if (vote == 0) {
+            bDevil.setEnabled(true);
+            bSaint.setEnabled(true);
+            bDevil.setClickable(true);
+            bSaint.setClickable(true);
+            bDevil.setBackgroundColor(Color.argb(255,255,68,68));
+            bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
+        } else if (vote == 1) {
+            bDevil.setEnabled(false);
+            bSaint.setEnabled(false);
+            bDevil.setClickable(false);
+            bSaint.setClickable(false);
+            bDevil.setBackgroundColor(Color.argb(255,255,68,68));
+            bSaint.setBackgroundColor(Color.GRAY);
+        } else if (vote == 2) {
+            bDevil.setEnabled(false);
+            bSaint.setEnabled(false);
+            bDevil.setClickable(false);
+            bSaint.setClickable(false);
+            bDevil.setBackgroundColor(Color.GRAY);
+            bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
+        } else {
+            Log.e(TAG, "Error: Vote returned wrong value.");
+        }
+    }
+
+    /**
+     * The recognized face ID is passed to the MainActivity
+     * @param faceID a random ID inside a string.
+     */
+    public void setButtonVariable(String faceID) {
+        rsFaceID = faceID;
     }
 
     /**
@@ -155,6 +241,7 @@ public final class MainActivity extends AppCompatActivity {
         Context context = getApplicationContext();
         FaceDetector detector = new FaceDetector.Builder(context)
                 .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
+                .setMode(FaceDetector.ACCURATE_MODE)
                 .setLandmarkType(FaceDetector.ALL_LANDMARKS)
                 .setProminentFaceOnly(true)
                 .setTrackingEnabled(true)
@@ -375,15 +462,11 @@ public final class MainActivity extends AppCompatActivity {
         private GraphicOverlay mOverlay = mGraphicOverlay;
         private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
         private int count = 0;
+        private int countA = 0;
+
         @Override
         public void onNewItem(int faceId, Face item) {
             mGraphicOverlay.setId(faceId);
-            //capture image if new Face is detected
-            //Log.d(TAG, "--- takePicture() ---");
-            /*if (count < 1) {
-                count++;
-                takePicture(item);
-            }*/
         }
 
         @Override
@@ -400,10 +483,21 @@ public final class MainActivity extends AppCompatActivity {
             }
 
             if (count < 1 && leftEye && rightEye) {
-                count++;
-                mOverlay.add(mFaceGraphic);
-                takePicture(face);
-                mFaceGraphic.updateFace(face);
+                if (countA > 6) {
+                    count++;
+                    mOverlay.add(mFaceGraphic);
+                    takePicture(face);
+                    //mFaceGraphic.setDevilOrSaint(1);
+                    mFaceGraphic.updateFace(face);
+
+                } else {
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    countA++;
+                }
             }
         }
 
@@ -432,21 +526,21 @@ public final class MainActivity extends AppCompatActivity {
          * @param face The detected Face with Landmarks
          */
         public void takePicture(final Face face) {
-            final Face item = face;
             mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    Bitmap mutableBitmap = bmp.copy(Bitmap.Config.ARGB_8888,true);
-                    onPause();
-                    Canvas canvas = new Canvas(mutableBitmap);
-                    mPreview.getSurfaceView().draw(canvas);
 
-                    //bmp = rotateClockBitmap(bmp, 90);
+                    bmp = rotateClockBitmap(bmp, 90);
                     //Bitmap grayFace = grayFaceBitmap(bmp, face);
-                    Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
+                    //Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
 
-                    //new UploadFileToServer().execute(bmp);
+                    new UploadFileToServer(MainActivity.this, mFaceGraphic, face, instanceID).execute(bmp);
+
+                    Bitmap tmp2 = bmp.copy(Bitmap.Config.RGB_565,true);
+                    onPause();
+                    Canvas canvas = new Canvas(tmp2);
+                    mPreview.getSurfaceView().draw(canvas);
 
                 }
             });
@@ -465,15 +559,15 @@ public final class MainActivity extends AppCompatActivity {
             Matrix matrix = new Matrix();
             matrix.postRotate(degrees);
 
-            Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
-            Bitmap rotatedBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight(), matrix, true);
+            //Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
+            original = Bitmap.createBitmap(original, 0, 0, width, height, matrix, true);
             /*Canvas canvas = new Canvas(rotatedBitmap);
             canvas.drawBitmap(original, 0.0f, 0.0f, null);*/
 
-            return rotatedBitmap;
+            return original;
         }
 
-        public Bitmap grayFaceBitmap(Bitmap original, Face face) {
+        /*public Bitmap grayFaceBitmap(Bitmap original, Face face) {
             float bitWidth = original.getWidth();
             float bitHeight = original.getHeight();
             int dispWidth = 480;
@@ -503,17 +597,17 @@ public final class MainActivity extends AppCompatActivity {
             Log.d("BITMAP", "GrayFace --- x: " + x + " y: " + y + " scaled: width x height: " + widthScaled + "x" + heightScaled);
             Bitmap grayFaceImage = Bitmap.createBitmap(original, x, y, wCrop, hCrop);
 
-            /*Bitmap grayFaceImage = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.RGB_565);
+            Bitmap grayFaceImage = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.RGB_565);
             Canvas c = new Canvas(grayFaceImage);
             Paint paint = new Paint();
             ColorMatrix cm = new ColorMatrix();
             cm.setSaturation(0);
             ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
             paint.setColorFilter(f);
-            c.drawBitmap(original, 0, 0, paint);*/
+            c.drawBitmap(original, 0, 0, paint);
 
             return grayFaceImage;
-        }
+        }*/
     }
 
     //==============================================================================================
@@ -524,17 +618,17 @@ public final class MainActivity extends AppCompatActivity {
      * Factory for creating a face tracker to be associated with a new face.  The multiprocessor
      * uses this factory to create face trackers as needed -- one for each individual.
      */
-    private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
+   /* private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
         @Override
         public Tracker<Face> create(Face face) {
             return new GraphicFaceTracker(mGraphicOverlay);
         }
     }
 
-    /**
+    *//**
      * Face tracker for each detected individual. This maintains a face graphic within the app's
      * associated face overlay.
-     */
+     *//*
     private class GraphicFaceTracker extends Tracker<Face> {
         private GraphicOverlay mOverlay;
         private FaceGraphic mFaceGraphic;
@@ -544,40 +638,40 @@ public final class MainActivity extends AppCompatActivity {
             mFaceGraphic = new FaceGraphic(overlay, getApplicationContext());
         }
 
-        /**
+        *//**
          * Start tracking the detected face instance within the face overlay.
-         */
+         *//*
         @Override
         public void onNewItem(int faceId, Face item) {
             mFaceGraphic.setId(faceId);
         }
 
-        /**
+        *//**
          * Update the position/characteristics of the face within the overlay.
-         */
+         *//*
         @Override
         public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
             mOverlay.add(mFaceGraphic);
             mFaceGraphic.updateFace(face);
         }
 
-        /**
+        *//**
          * Hide the graphic when the corresponding face was not detected.  This can happen for
          * intermediate frames temporarily (e.g., if the face was momentarily blocked from
          * view).
-         */
+         *//*
         @Override
         public void onMissing(FaceDetector.Detections<Face> detectionResults) {
             mOverlay.remove(mFaceGraphic);
         }
 
-        /**
+        *//**
          * Called when the face is assumed to be gone for good. Remove the graphic annotation from
          * the overlay.
-         */
+         *//*
         @Override
         public void onDone() {
             mOverlay.remove(mFaceGraphic);
         }
-    }
+    }*/
 }

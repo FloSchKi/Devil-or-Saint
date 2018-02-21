@@ -24,7 +24,6 @@ class FaceGraphic extends GraphicOverlay.Graphic {
     private static final float ID_Y_OFFSET = 50.0f;
     private static final float ID_X_OFFSET = -50.0f;
     private static final float BOX_STROKE_WIDTH = 5.0f;
-    private Context mainContext;
 
     private static final int COLOR_CHOICES[] = {
             Color.BLUE,
@@ -42,8 +41,9 @@ class FaceGraphic extends GraphicOverlay.Graphic {
     private Paint mBoxPaint;
 
     private volatile Face mFace;
+    private Context mainContext;
     private int mFaceId;
-    private float mFaceHappiness;
+    private int devilOrSaint = 0;
 
     FaceGraphic(GraphicOverlay overlay, Context mainContext) {
         super(overlay);
@@ -69,6 +69,14 @@ class FaceGraphic extends GraphicOverlay.Graphic {
         mFaceId = id;
     }
 
+    /**
+     *
+     * @param doSCode can have three values:
+     *                0 = no face filter
+     *                1 = devil face filter
+     *                2 = saint face filter
+     */
+    public void setDevilOrSaint(Integer doSCode) { devilOrSaint = doSCode; }
 
     /**
      * Updates the face instance from the detection of the most recent frame.  Invalidates the
@@ -89,33 +97,47 @@ class FaceGraphic extends GraphicOverlay.Graphic {
             return;
         }
 
-        // Draws a circle at the position of the detected face, with the face's track id below.
         float x = scaleX(face.getPosition().x);
         float y = scaleY(face.getPosition().y);
 
-        PointF leftEye = new PointF(0,0);
-        PointF rightEye = new PointF(0,0);
-        for (Landmark landmark : face.getLandmarks()) {
-            if(landmark.getType() == Landmark.LEFT_EYE) {
-                leftEye = landmark.getPosition();
+        if(devilOrSaint == 1) { //Devil Face Filter is shown
+            PointF leftEye = new PointF(0,0);
+            PointF rightEye = new PointF(0,0);
+            for (Landmark landmark : face.getLandmarks()) {
+                if(landmark.getType() == Landmark.LEFT_EYE) {
+                    leftEye = landmark.getPosition();
+                }
+                if(landmark.getType() == Landmark.RIGHT_EYE) {
+                    rightEye = landmark.getPosition();
+                }
             }
-            if(landmark.getType() == Landmark.RIGHT_EYE) {
-                rightEye = landmark.getPosition();
-            }
+
+            float devilWidth = scaleX(leftEye.x) - x;
+            float leftEyePadding = (x + scaleX(face.getWidth())) - scaleX(leftEye.x);
+            float devilHeight = devilWidth/400*70;
+
+            int left = Math.round(x + (scaleX(rightEye.x) - x)/2.0f);
+            int top = Math.round(y + ((scaleY(leftEye.y) - y)/2.0f) - devilHeight);
+            int right = Math.round(scaleX(leftEye.x) + leftEyePadding/2.0f);
+            int bottom = Math.round(top + devilHeight*2.0f);
+
+            Drawable devil = mainContext.getDrawable(R.drawable.devil);
+            devil.setBounds(left, top, right, bottom);
+            devil.draw(canvas);
+        } else if (devilOrSaint == 2) { //Saint Face Filter is shown
+            float haloWidth = scaleX(face.getWidth());
+            //float haloWidth = scaleX(leftEye.x) - scaleX(rightEye.x);
+
+            //int left = Math.round(scaleX(rightEye.x));
+            int left = Math.round(x);
+            int top = Math.round(y);
+            int right = Math.round(left + haloWidth);
+            int bottom = Math.round(y + (haloWidth/400*70));
+
+            Drawable halo = mainContext.getDrawable(R.drawable.halo);
+            halo.setBounds(left, top, right, bottom);
+            halo.draw(canvas);
         }
-
-        float haloWidth = scaleX(face.getWidth());
-        //float haloWidth = scaleX(leftEye.x) - scaleX(rightEye.x);
-
-        //int left = Math.round(scaleX(rightEye.x));
-        int left = Math.round(x);
-        int top = Math.round(y);
-        int right = Math.round(left + haloWidth);
-        int bottom = Math.round(y + (haloWidth/400*70));
-
-        Drawable halo = mainContext.getDrawable(R.drawable.halo);
-        halo.setBounds(left, top, right, bottom);
-        halo.draw(canvas);
 
         /*canvas.drawCircle(x, y, FACE_POSITION_RADIUS, mFacePositionPaint);
         canvas.drawText("id: " + mFaceId, x + ID_X_OFFSET, y + ID_Y_OFFSET, mIdPaint);
