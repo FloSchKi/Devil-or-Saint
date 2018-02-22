@@ -38,7 +38,21 @@
             android:text="@string/rbtnDevil" />
 
         <Space
-            android:layout_width="95dp"
+            android:layout_width="15dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0" />
+
+        <Button
+            android:id="@+id/btnDone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"
+            android:onClick="onClickDone"
+            android:text="@string/rbtnDone"
+            android:visibility="invisible" />
+
+        <Space
+            android:layout_width="15dp"
             android:layout_height="match_parent"
             android:layout_weight="0" />
 

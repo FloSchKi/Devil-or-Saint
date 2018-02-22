@@ -76,8 +76,10 @@ public final class MainActivity extends AppCompatActivity {
     private GraphicOverlay mGraphicOverlay;
     private Button bDevil;
     private Button bSaint;
+    private Button bDone;
     private String rsFaceID;
     private String instanceID;
+    private FaceGraphic fGraphic;
     //private SurfaceView cspSurfaceView;
     //private CameraDevice cameraDevice;
     //private CaptureRequest.Builder captureRequestBuilder;
@@ -114,10 +116,13 @@ public final class MainActivity extends AppCompatActivity {
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
         bDevil = (Button) findViewById(R.id.btnDevil);
         bSaint = (Button) findViewById(R.id.btnSaint);
+        bDone = (Button) findViewById(R.id.btnDone);
+
         bDevil.setEnabled(false);
         bDevil.setClickable(false);
         bSaint.setEnabled(false);
         bSaint.setClickable(false);
+        bDone.setClickable(false);
 
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
 
@@ -137,7 +142,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Executes this method if the Devil Button is clicked
+     * Highlights the Devil button and sends vote to Server
      * @param view
      */
     public void onClickDevil(View view) {
@@ -146,12 +151,36 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Executes this method if the Saint Button is clicked
+     * Highlights the Saint button and sends vote to Server
      * @param view
      */
     public void onClickSaint(View view) {
         new UploadVote(rsFaceID, instanceID, "2").execute();
         changeButtonStatus(2);
+    }
+
+    /**
+     * Closes the image and resumes the Camera to detect the next face
+     * @param view
+     */
+    public void onClickDone(View view) {
+        restartLifeCycle();
+    }
+
+    public void restartLifeCycle() {
+        //reset Buttons to default
+        bDevil.setBackgroundColor(Color.argb(255,255,68,68));
+        bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
+
+        bDevil.setEnabled(false);
+        bSaint.setEnabled(false);
+        bDevil.setClickable(false);
+        bSaint.setClickable(false);
+        bDone.setClickable(false);
+        bDone.setVisibility(Button.INVISIBLE);
+
+        fGraphic.setDevilOrSaint(0);
+        onResume();
     }
 
     /**
@@ -168,20 +197,36 @@ public final class MainActivity extends AppCompatActivity {
             bSaint.setEnabled(true);
             bDevil.setClickable(true);
             bSaint.setClickable(true);
+
+            bDone.setClickable(false);
+            bDone.setVisibility(Button.INVISIBLE);
+
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
             bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
         } else if (vote == 1) {
+            //disable buttons if previously voted
             bDevil.setEnabled(false);
             bSaint.setEnabled(false);
             bDevil.setClickable(false);
             bSaint.setClickable(false);
+
+            bDone.setClickable(true);
+            bDone.setVisibility(Button.VISIBLE);
+
+            //last choice is highlighted
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
             bSaint.setBackgroundColor(Color.GRAY);
         } else if (vote == 2) {
+            //disable buttons if previously voted
             bDevil.setEnabled(false);
             bSaint.setEnabled(false);
             bDevil.setClickable(false);
             bSaint.setClickable(false);
+
+            bDone.setClickable(true);
+            bDone.setVisibility(Button.VISIBLE);
+
+            //last choice is highlighted
             bDevil.setBackgroundColor(Color.GRAY);
             bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
         } else {
@@ -193,8 +238,9 @@ public final class MainActivity extends AppCompatActivity {
      * The recognized face ID is passed to the MainActivity
      * @param faceID a random ID inside a string.
      */
-    public void setButtonVariable(String faceID) {
+    public void setButtonVariable(String faceID, FaceGraphic fg) {
         rsFaceID = faceID;
+        fGraphic = fg;
     }
 
     /**
@@ -413,7 +459,7 @@ public final class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void SaveImage(Bitmap finalBitmap) {
+    /*private void SaveImage(Bitmap finalBitmap) {
 
         String root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).toString();
         File myDir = new File(root + "/Devil_or_Saint");
@@ -452,7 +498,7 @@ public final class MainActivity extends AppCompatActivity {
             Log.v(TAG,"Permission is granted");
             return true;
         }
-    }
+    }*/
 
     //==============================================================================================
     // My Face Tracker
@@ -461,7 +507,6 @@ public final class MainActivity extends AppCompatActivity {
     public class FaceTracker extends Tracker<Face> {
         private GraphicOverlay mOverlay = mGraphicOverlay;
         private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
-        private int count = 0;
         private int countA = 0;
 
         @Override
@@ -482,14 +527,13 @@ public final class MainActivity extends AppCompatActivity {
                 }
             }
 
-            if (count < 1 && leftEye && rightEye) {
+            if (leftEye && rightEye) {
                 if (countA > 6) {
-                    count++;
                     mOverlay.add(mFaceGraphic);
                     takePicture(face);
                     //mFaceGraphic.setDevilOrSaint(1);
                     mFaceGraphic.updateFace(face);
-
+                    countA = 0;
                 } else {
                     try {
                         TimeUnit.MILLISECONDS.sleep(10);

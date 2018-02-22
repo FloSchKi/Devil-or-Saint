@@ -8,5 +8,6 @@
     <string name="permission_camera_storage_rationale">Camera and storage permissions are essential for this Application to run properly!</string>
     <string name="rbtnDevil">Devil</string>
     <string name="rbtnSaint">Saint</string>
+    <string name="rbtnDone">Done</string>
     <!--<string name="action_settings">Settings</string>-->
 </resources>

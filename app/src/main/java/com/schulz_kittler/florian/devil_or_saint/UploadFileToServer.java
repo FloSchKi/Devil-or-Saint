@@ -161,7 +161,7 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
                 faceID = output[0];
 
                 MainActivity main = (MainActivity) mainContext;
-                main.setButtonVariable(faceID);
+                main.setButtonVariable(faceID, fGraphic);
                 fGraphic.setDevilOrSaint(dos);
                 fGraphic.updateFace(face);
                 main.changeButtonStatus(vote);
