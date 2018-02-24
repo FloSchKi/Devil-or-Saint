@@ -12,14 +12,21 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.PointF;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
+import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -30,14 +37,19 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.text.TextUtils;
 import android.util.Log;
+import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ProgressBar;
+import android.widget.TableLayout;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -74,31 +86,22 @@ public final class MainActivity extends AppCompatActivity {
     private CameraSource mCameraSource = null;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
+    private TableLayout lcontacts;
     private Button bDevil;
     private Button bSaint;
     private Button bDone;
+    private Button bEdit;
     private String rsFaceID;
     private String instanceID;
+    private int editUpdated;
+    private EditText tbName;
+    private EditText tbAdresse;
+    private EditText tbTel;
     private FaceGraphic fGraphic;
-    //private SurfaceView cspSurfaceView;
-    //private CameraDevice cameraDevice;
-    //private CaptureRequest.Builder captureRequestBuilder;
-    //private CameraCaptureSession cameraCaptureSession;
 
     private static final int RC_HANDLE_GMS = 9001;
-    // permission request codes need to be < 256
     private static final int REQUEST_CAMERA = 1;
     private static final int REQUEST_CAMERA_STORAGE_PERM = 2;
-    //private static final String PYTHON_SERVER_URL = "http://schulz.pythonanywhere.com/bafacerec";
-
-    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
-    static
-    {
-        ORIENTATIONS.append(Surface.ROTATION_0,90);
-        ORIENTATIONS.append(Surface.ROTATION_90,0);
-        ORIENTATIONS.append(Surface.ROTATION_180,270);
-        ORIENTATIONS.append(Surface.ROTATION_270,180);
-    }
 
     //==============================================================================================
     // Activity Methods
@@ -114,20 +117,47 @@ public final class MainActivity extends AppCompatActivity {
 
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
+        lcontacts = (TableLayout) findViewById(R.id.lcontact);
+        tbName = (EditText) findViewById(R.id.tbname);
+        tbAdresse = (EditText) findViewById(R.id.tbadresse);
+        tbTel = (EditText) findViewById(R.id.tbtel);
         bDevil = (Button) findViewById(R.id.btnDevil);
         bSaint = (Button) findViewById(R.id.btnSaint);
         bDone = (Button) findViewById(R.id.btnDone);
+        bEdit = (Button) findViewById(R.id.btnEdit);
+
+        lcontacts.setVisibility(View.GONE);
 
         bDevil.setEnabled(false);
         bDevil.setClickable(false);
         bSaint.setEnabled(false);
         bSaint.setClickable(false);
         bDone.setClickable(false);
+        bEdit.setClickable(false);
+
+        editUpdated = 0;
 
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
 
         instanceID = InstanceID.getInstance(getApplicationContext()).getId();
         //instanceID = "abcdefghij2";
+
+        /*Size[] sizes = null;
+        try {
+            CameraManager cm = (CameraManager) this.getSystemService(Context.CAMERA_SERVICE);
+            for (String cameraId : cm.getCameraIdList()) {
+                CameraCharacteristics cameraCharacteristics =
+                        cm.getCameraCharacteristics(cameraId);
+                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) ==
+                        CameraMetadata.LENS_FACING_BACK) {
+                    StreamConfigurationMap streamConfigurationMap = cameraCharacteristics.get(
+                            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                    sizes = streamConfigurationMap.getOutputSizes(ImageFormat.JPEG);
+                }
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }*/
 
         //cspSurfaceView = mPreview.getSurfaceView();
 
@@ -164,7 +194,31 @@ public final class MainActivity extends AppCompatActivity {
      * @param view
      */
     public void onClickDone(View view) {
+        String txtName = tbName.getText().toString();
+        String txtAdresse = tbAdresse.getText().toString();
+        String txtTel = tbTel.getText().toString();
+
+        if(!TextUtils.isEmpty(txtName) || !TextUtils.isEmpty(txtAdresse) || !TextUtils.isEmpty(txtTel)) {
+            new UploadVote(MainActivity.this, rsFaceID, txtName, txtAdresse, txtTel).execute();
+        }
+
         restartLifeCycle();
+    }
+
+    /**
+     * Opens the Panel to edit the Information of the Face
+     * @param view
+     */
+    public void onClickEdit(View view) {
+        if (editUpdated == 0) {
+            new UploadVote(MainActivity.this, rsFaceID, "", "", "").execute();
+            editUpdated = 1;
+        }
+        if(lcontacts.getVisibility() == View.GONE) {
+            lcontacts.setVisibility(View.VISIBLE);
+        } else {
+            lcontacts.setVisibility(View.GONE);
+        }
     }
 
     public void restartLifeCycle() {
@@ -176,8 +230,18 @@ public final class MainActivity extends AppCompatActivity {
         bSaint.setEnabled(false);
         bDevil.setClickable(false);
         bSaint.setClickable(false);
+
         bDone.setClickable(false);
         bDone.setVisibility(Button.INVISIBLE);
+        bEdit.setClickable(false);
+        bEdit.setVisibility(View.INVISIBLE);
+
+        tbName.setText("");
+        tbAdresse.setText("");
+        tbTel.setText("");
+        lcontacts.setVisibility(View.GONE);
+
+        editUpdated = 0;
 
         fGraphic.setDevilOrSaint(0);
         onResume();
@@ -200,6 +264,8 @@ public final class MainActivity extends AppCompatActivity {
 
             bDone.setClickable(false);
             bDone.setVisibility(Button.INVISIBLE);
+            bEdit.setClickable(false);
+            bEdit.setVisibility(View.INVISIBLE);
 
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
             bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
@@ -212,6 +278,9 @@ public final class MainActivity extends AppCompatActivity {
 
             bDone.setClickable(true);
             bDone.setVisibility(Button.VISIBLE);
+            bEdit.setClickable(true);
+            bEdit.setVisibility(View.VISIBLE);
+            //lcontacts.setVisibility(View.VISIBLE);
 
             //last choice is highlighted
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
@@ -225,6 +294,9 @@ public final class MainActivity extends AppCompatActivity {
 
             bDone.setClickable(true);
             bDone.setVisibility(Button.VISIBLE);
+            bEdit.setClickable(true);
+            bEdit.setVisibility(View.VISIBLE);
+            //lcontacts.setVisibility(View.VISIBLE);
 
             //last choice is highlighted
             bDevil.setBackgroundColor(Color.GRAY);
@@ -241,6 +313,12 @@ public final class MainActivity extends AppCompatActivity {
     public void setButtonVariable(String faceID, FaceGraphic fg) {
         rsFaceID = faceID;
         fGraphic = fg;
+    }
+
+    public void setContact(String name, String adresse, String tel) {
+        tbName.setText(name);
+        tbAdresse.setText(adresse);
+        tbTel.setText(tel);
     }
 
     /**
@@ -366,19 +444,6 @@ public final class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch(requestCode) {
-            /*case REQUEST_CAMERA: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length != 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // permission granted
-                    Log.d(TAG, "Storage permission granted!");
-                } else {
-
-                    // permission denied
-                    Log.d(TAG, "Storage permission denied!");
-                }
-                return;
-            }*/
             case REQUEST_CAMERA_STORAGE_PERM: {
                 Map<String, Integer> perms = new HashMap<String, Integer>();
                 perms.put(Manifest.permission.CAMERA, PackageManager.PERMISSION_GRANTED);
@@ -398,28 +463,6 @@ public final class MainActivity extends AppCompatActivity {
 
                     Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT).show();
                 }
-
-                /*if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.d(TAG, "Camera permission granted - initialize the camera source");
-                    // we have permission, so create the camerasource
-                    createCameraSource();
-                } else {
-                    Log.e(TAG, "Permission not granted: results len = " + grantResults.length +
-                            " Result code = " + (grantResults.length > 0 ? grantResults[0] : "(empty)"));
-
-                    DialogInterface.OnClickListener listener = new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            finish();
-                        }
-                    };
-
-                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                    builder.setTitle("Face Tracker sample")
-                            .setMessage(R.string.no_camera_permission)
-                            .setPositiveButton(R.string.ok, listener)
-                            .show();
-                }
-                return;*/
             }
             default: {
                 Log.d(TAG, "Got unexpected permission result: " + requestCode);
@@ -458,47 +501,6 @@ public final class MainActivity extends AppCompatActivity {
             }
         }
     }
-
-    /*private void SaveImage(Bitmap finalBitmap) {
-
-        String root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).toString();
-        File myDir = new File(root + "/Devil_or_Saint");
-        myDir.mkdirs();
-        Random generator = new Random();
-        int n = 10000;
-        n = generator.nextInt(n);
-        String fname = "DoS-"+ n +".jpg";
-        File file = new File (myDir, fname);
-        if (file.exists ()) file.delete ();
-        try {
-            FileOutputStream out = new FileOutputStream(file);
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
-            out.flush();
-            out.close();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    public  boolean isStoragePermissionGranted() {
-        if (Build.VERSION.SDK_INT >= 23) {
-            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED) {
-                Log.v(TAG,"Permission is granted");
-                return true;
-            } else {
-
-                Log.v(TAG,"Permission is revoked");
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);
-                return false;
-            }
-        }
-        else { //permission is automatically granted on sdk<23 upon installation
-            Log.v(TAG,"Permission is granted");
-            return true;
-        }
-    }*/
 
     //==============================================================================================
     // My Face Tracker
@@ -573,11 +575,31 @@ public final class MainActivity extends AppCompatActivity {
             mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
+                    /*BitmapFactory.Options opt = new BitmapFactory.Options();
+                    opt.inSampleSize = 2;*/
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
 
                     bmp = rotateClockBitmap(bmp, 90);
                     //Bitmap grayFace = grayFaceBitmap(bmp, face);
                     //Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
+
+                    //Commented out part is to crop out the face
+                    /*int bitWidth = bmp.getWidth();
+                    int bitHeight = bmp.getHeight();
+                    float pWidth = 480.0f;
+                    float pHeight = 640.0f;
+                    float factorW = bitWidth/pWidth;
+                    float factorH = bitHeight/pHeight;
+
+                    float x = face.getPosition().x * factorW;
+                    float y = face.getPosition().y * factorH;
+                    float fWidth = (face.getPosition().x + face.getWidth())*factorW;
+                    float fHeight = (face.getPosition().y + face.getHeight())*factorH;
+
+                    fWidth = fWidth - x;
+                    fHeight = fHeight - y;
+
+                    Bitmap tmp = Bitmap.createBitmap(bmp, Math.round(x), Math.round(y), Math.round(fWidth), Math.round(fHeight));*/
 
                     new UploadFileToServer(MainActivity.this, mFaceGraphic, face, instanceID).execute(bmp);
 
@@ -610,112 +632,5 @@ public final class MainActivity extends AppCompatActivity {
 
             return original;
         }
-
-        /*public Bitmap grayFaceBitmap(Bitmap original, Face face) {
-            float bitWidth = original.getWidth();
-            float bitHeight = original.getHeight();
-            int dispWidth = 480;
-            int dispHeight = 640;
-
-            float scaleX = bitWidth/dispWidth;
-            float scaleY = bitHeight/dispHeight;
-            float widthScaled = face.getWidth()*scaleX;
-            float heightScaled = face.getHeight()*scaleY;
-            int x = Math.round(face.getPosition().x);
-            int y = Math.round(face.getPosition().y);
-            int wCrop = 0;
-            int hCrop = 0;
-            if (x < 0) {
-                wCrop = Math.round(widthScaled - x);
-                x=0;
-            } else {
-                wCrop = Math.round(widthScaled);
-            }
-            if (y < 0) {
-                hCrop = Math.round(heightScaled - y);
-                y=0;
-            } else {
-                hCrop = Math.round(heightScaled);
-            }
-
-            Log.d("BITMAP", "GrayFace --- x: " + x + " y: " + y + " scaled: width x height: " + widthScaled + "x" + heightScaled);
-            Bitmap grayFaceImage = Bitmap.createBitmap(original, x, y, wCrop, hCrop);
-
-            Bitmap grayFaceImage = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.RGB_565);
-            Canvas c = new Canvas(grayFaceImage);
-            Paint paint = new Paint();
-            ColorMatrix cm = new ColorMatrix();
-            cm.setSaturation(0);
-            ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
-            paint.setColorFilter(f);
-            c.drawBitmap(original, 0, 0, paint);
-
-            return grayFaceImage;
-        }*/
     }
-
-    //==============================================================================================
-    // Graphic Face Tracker
-    //==============================================================================================
-
-    /**
-     * Factory for creating a face tracker to be associated with a new face.  The multiprocessor
-     * uses this factory to create face trackers as needed -- one for each individual.
-     */
-   /* private class GraphicFaceTrackerFactory implements MultiProcessor.Factory<Face> {
-        @Override
-        public Tracker<Face> create(Face face) {
-            return new GraphicFaceTracker(mGraphicOverlay);
-        }
-    }
-
-    *//**
-     * Face tracker for each detected individual. This maintains a face graphic within the app's
-     * associated face overlay.
-     *//*
-    private class GraphicFaceTracker extends Tracker<Face> {
-        private GraphicOverlay mOverlay;
-        private FaceGraphic mFaceGraphic;
-
-        GraphicFaceTracker(GraphicOverlay overlay) {
-            mOverlay = overlay;
-            mFaceGraphic = new FaceGraphic(overlay, getApplicationContext());
-        }
-
-        *//**
-         * Start tracking the detected face instance within the face overlay.
-         *//*
-        @Override
-        public void onNewItem(int faceId, Face item) {
-            mFaceGraphic.setId(faceId);
-        }
-
-        *//**
-         * Update the position/characteristics of the face within the overlay.
-         *//*
-        @Override
-        public void onUpdate(FaceDetector.Detections<Face> detectionResults, Face face) {
-            mOverlay.add(mFaceGraphic);
-            mFaceGraphic.updateFace(face);
-        }
-
-        *//**
-         * Hide the graphic when the corresponding face was not detected.  This can happen for
-         * intermediate frames temporarily (e.g., if the face was momentarily blocked from
-         * view).
-         *//*
-        @Override
-        public void onMissing(FaceDetector.Detections<Face> detectionResults) {
-            mOverlay.remove(mFaceGraphic);
-        }
-
-        *//**
-         * Called when the face is assumed to be gone for good. Remove the graphic annotation from
-         * the overlay.
-         *//*
-        @Override
-        public void onDone() {
-            mOverlay.remove(mFaceGraphic);
-        }
-    }*/
 }

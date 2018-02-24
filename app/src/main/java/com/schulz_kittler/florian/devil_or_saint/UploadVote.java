@@ -1,5 +1,6 @@
 package com.schulz_kittler.florian.devil_or_saint;
 
+import android.content.Context;
 import android.os.AsyncTask;
 import android.util.Log;
 
@@ -21,14 +22,27 @@ import java.net.URL;
 
 public class UploadVote extends AsyncTask<String, Void, String> {
     private static final String TAG = "UploadVote";
-    private String id;
-    private String predicted_label;
-    private String vote;
+    private String param1;
+    private String param2;
+    private String param3;
+    private String param4;
+    private Boolean urlVote;
+    private Context mainContext;
 
-    public UploadVote(String predicted_label, String iID, String vote) {
-        id = iID;
-        this.predicted_label = predicted_label;
-        this.vote = vote;
+    public UploadVote(String str1, String str2, String str3) {
+        param1 = str1;
+        param2 = str2;
+        param3 = str3;
+        urlVote = true;
+    }
+
+    public UploadVote(Context con, String str1, String str2, String str3, String str4) {
+        mainContext = con;
+        param1 = str1;
+        param2 = str2;
+        param3 = str3;
+        param4 = str4;
+        urlVote = false;
     }
 
     @Override
@@ -36,7 +50,12 @@ public class UploadVote extends AsyncTask<String, Void, String> {
         String resultStr = null;
 
         try {
-            URL url = new URL("http://schulz.pythonanywhere.com/vote");
+            URL url;
+            if (urlVote) {
+                url = new URL("http://schulz.pythonanywhere.com/vote");
+            } else {
+                url = new URL("http://schulz.pythonanywhere.com/contact");
+            }
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Connection", "Keep-Alive");
@@ -45,9 +64,17 @@ public class UploadVote extends AsyncTask<String, Void, String> {
             MultipartEntity entity = new MultipartEntity(
                     HttpMultipartMode.BROWSER_COMPATIBLE);
 
-            entity.addPart("vote", new StringBody(vote));
-            entity.addPart("label", new StringBody(predicted_label));
-            entity.addPart("iid", new StringBody(id));
+
+            if (urlVote) {
+                entity.addPart("vote", new StringBody(param3));
+                entity.addPart("label", new StringBody(param1));
+                entity.addPart("iid", new StringBody(param2));
+            } else {
+                entity.addPart("label", new StringBody(param1));
+                entity.addPart("name", new StringBody(param2));
+                entity.addPart("adresse", new StringBody(param3));
+                entity.addPart("telnr", new StringBody(param4));
+            }
             Log.d(TAG, "**Vote** - Strings wurden zum POST hinzugefügt.");
 
             conn.addRequestProperty("Content-length", entity.getContentLength() + "");
@@ -100,6 +127,43 @@ public class UploadVote extends AsyncTask<String, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
+        if (!result.contains("Error") && !result.contains("DBContact")) {
+            if(!urlVote && !result.equals("1::2::3:")) {
+                int step = 1;
+                String[] strSplit = result.split(":");
+                int strSize = strSplit.length;
+                String name = strSplit[1];
+                String adresse = strSplit[3];
+                String telnr = "";
+
+                Log.d(TAG, "strSplit.size(): " + strSize);
+
+                if (strSize == 6) {
+                    telnr = strSplit[5];
+                }
+                /*if (!strSplit[step].equals("2")) {
+                    name = strSplit[step];
+                    step = step+2;
+                } else {
+                    step = step+1;
+                }
+
+                if (!strSplit[step].equals("3")) {
+                    adresse = strSplit[step];
+                    step = step+2;
+                } else {
+                    step = step+1;
+                }
+
+                if((step-1) < strSize) {
+                    telnr = strSplit[step];
+                }*/
+                MainActivity main = (MainActivity) mainContext;
+                main.setContact(name, adresse, telnr);
+            } else {
+                Log.d(TAG, "**Vote** - Empty String returned!");
+            }
+        }
         Log.d(TAG, "**Vote** - Fertig! - " + result);
     }
 }

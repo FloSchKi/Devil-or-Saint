@@ -9,5 +9,8 @@
     <string name="rbtnDevil">Devil</string>
     <string name="rbtnSaint">Saint</string>
     <string name="rbtnDone">Done</string>
+    <string name="rtname">Name:</string>
+    <string name="rtadresse">Adresse:</string>
+    <string name="rttelnr">Tel.:</string>
     <!--<string name="action_settings">Settings</string>-->
 </resources>

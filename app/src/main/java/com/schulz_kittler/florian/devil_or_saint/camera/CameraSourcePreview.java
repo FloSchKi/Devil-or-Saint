@@ -179,8 +179,14 @@ public class CameraSourcePreview extends ViewGroup {
             childWidth = (int)(((float) layoutHeight / (float) height) * width);
         }
 
+        int center = 0;
+        if(childWidth != layoutWidth) {
+            center = (int)((layoutWidth-childWidth)/2.0f);
+        }
+
         for (int i = 0; i < getChildCount(); ++i) {
-            getChildAt(i).layout(0, 0, childWidth, childHeight);
+            //getChildAt(i).layout(0, 0, childWidth, childHeight);
+            getChildAt(i).layout(center, 0, childWidth+center, childHeight);
         }
 
         try {

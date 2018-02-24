@@ -1,12 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/baseLayout"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:keepScreenOn="true">
+    android:gravity="center_horizontal"
+    android:keepScreenOn="true"
+    android:orientation="vertical">
+
+    <TableLayout
+        android:id="@+id/lcontact"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="visible">
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/tname"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/rtname" />
+
+            <EditText
+                android:id="@+id/tbname"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ems="10"
+                android:inputType="textPersonName"
+                android:singleLine="true" />
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/tadresse"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/rtadresse" />
+
+            <EditText
+                android:id="@+id/tbadresse"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ems="10"
+                android:inputType="textPostalAddress"
+                android:singleLine="true" />
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/ttelnr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/rttelnr" />
+
+            <EditText
+                android:id="@+id/tbtel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ems="10"
+                android:inputType="text"
+                android:singleLine="true" />
+        </TableRow>
+
+    </TableLayout>
 
     <com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview
         android:id="@+id/preview"
@@ -24,8 +91,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
         android:background="@android:color/black"
+        android:gravity="center_horizontal"
         android:orientation="horizontal">
 
         <Button
@@ -43,12 +110,26 @@
             android:layout_weight="0" />
 
         <Button
-            android:id="@+id/btnDone"
-            android:layout_width="wrap_content"
+            android:id="@+id/btnEdit"
+            android:layout_width="48dp"
             android:layout_height="wrap_content"
             android:layout_weight="0"
+            android:background="@android:drawable/ic_menu_edit"
+            android:onClick="onClickEdit"
+            android:visibility="invisible" />
+
+        <Space
+            android:layout_width="15dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0" />
+
+        <Button
+            android:id="@+id/btnDone"
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"
+            android:background="@android:drawable/ic_menu_send"
             android:onClick="onClickDone"
-            android:text="@string/rbtnDone"
             android:visibility="invisible" />
 
         <Space
