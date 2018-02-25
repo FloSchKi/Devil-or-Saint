@@ -7,6 +7,7 @@ import android.os.AsyncTask;
 import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import com.google.android.gms.vision.face.Face;
 
@@ -136,24 +137,25 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         int dos = 0;
         int vote = 3;
         int credits = 0;
+        boolean error = false;
         String faceID = "";
         if (result == null) {
-            mDialog.setMessage("String returned NULL");
             Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Null");
             try {
                 TimeUnit.SECONDS.sleep(2);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            error = true;
         }
         else if (result.contains("Error")) {
-            mDialog.setMessage("An Error occured during Face Recognition!");
-            Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Error" + result);
+            Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Error: " + result);
             try {
                 TimeUnit.SECONDS.sleep(2);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+            error = true;
         } else {
             try {
                 String[] output = result.split(", ");
@@ -174,6 +176,11 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             }
         }
         mDialog.dismiss();
+        if(error) {
+            Toast.makeText(mainContext, "An Error occured! Please try again.", Toast.LENGTH_SHORT).show();
+            MainActivity main = (MainActivity) mainContext;
+            main.restartLifeCycle();
+        }
         Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result); // + ", " + String.valueOf(myNum));
     }
 }

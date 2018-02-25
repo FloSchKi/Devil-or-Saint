@@ -248,7 +248,9 @@ public final class MainActivity extends AppCompatActivity {
 
         editUpdated = 0;
 
-        fGraphic.setDevilOrSaint(0);
+        if (fGraphic != null) {
+            fGraphic.setDevilOrSaint(0);
+        }
         onResume();
     }
 
