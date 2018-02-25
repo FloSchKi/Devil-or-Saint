@@ -39,11 +39,14 @@ class FaceGraphic extends GraphicOverlay.Graphic {
     private Paint mFacePositionPaint;
     private Paint mIdPaint;
     private Paint mBoxPaint;
+    private Paint mCreditsPaint;
 
     private volatile Face mFace;
     private Context mainContext;
     private int mFaceId;
     private int devilOrSaint = 0;
+    private int credits = 0;
+    private boolean cVisible = false;
 
     FaceGraphic(GraphicOverlay overlay, Context mainContext) {
         super(overlay);
@@ -58,6 +61,10 @@ class FaceGraphic extends GraphicOverlay.Graphic {
         mIdPaint = new Paint();
         mIdPaint.setColor(selectedColor);
         mIdPaint.setTextSize(ID_TEXT_SIZE);
+
+        mCreditsPaint = new Paint();
+        mCreditsPaint.setColor(Color.RED);
+        mCreditsPaint.setTextSize(50.0f);
 
         mBoxPaint = new Paint();
         mBoxPaint.setColor(selectedColor);
@@ -77,6 +84,14 @@ class FaceGraphic extends GraphicOverlay.Graphic {
      *                2 = saint face filter
      */
     public void setDevilOrSaint(Integer doSCode) { devilOrSaint = doSCode; }
+
+    public void setCredits(Integer cred) {
+        credits = cred;
+    }
+
+    public void setCreditsVisible(Boolean visible) {
+        cVisible = visible;
+    }
 
     /**
      * Updates the face instance from the detection of the most recent frame.  Invalidates the
@@ -137,6 +152,11 @@ class FaceGraphic extends GraphicOverlay.Graphic {
             Drawable halo = mainContext.getDrawable(R.drawable.halo);
             halo.setBounds(left, top, right, bottom);
             halo.draw(canvas);
+        }
+
+
+        if (cVisible) {
+            canvas.drawText("Credits: " + String.valueOf(credits), canvas.getWidth()/2.0f - 100.0f, 50, mCreditsPaint);
         }
 
         /*canvas.drawCircle(x, y, FACE_POSITION_RADIUS, mFacePositionPaint);

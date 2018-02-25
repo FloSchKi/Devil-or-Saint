@@ -135,6 +135,7 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
     protected void onPostExecute(String result) {
         int dos = 0;
         int vote = 3;
+        int credits = 0;
         String faceID = "";
         if (result == null) {
             mDialog.setMessage("String returned NULL");
@@ -159,10 +160,13 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
                 dos = Integer.parseInt(output[2]);
                 vote = Integer.parseInt(output[1]);
                 faceID = output[0];
+                credits = Integer.parseInt(output[3]);
 
                 MainActivity main = (MainActivity) mainContext;
                 main.setButtonVariable(faceID, fGraphic);
                 fGraphic.setDevilOrSaint(dos);
+                fGraphic.setCredits(credits);
+                fGraphic.setCreditsVisible(true);
                 fGraphic.updateFace(face);
                 main.changeButtonStatus(vote);
             } catch (NumberFormatException e) {

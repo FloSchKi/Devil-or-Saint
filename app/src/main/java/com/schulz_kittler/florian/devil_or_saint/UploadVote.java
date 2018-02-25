@@ -26,6 +26,7 @@ public class UploadVote extends AsyncTask<String, Void, String> {
     private String param2;
     private String param3;
     private String param4;
+    private String paramId;
     private Boolean urlVote;
     private Context mainContext;
 
@@ -36,12 +37,13 @@ public class UploadVote extends AsyncTask<String, Void, String> {
         urlVote = true;
     }
 
-    public UploadVote(Context con, String str1, String str2, String str3, String str4) {
+    public UploadVote(Context con, String str1, String str2, String str3, String str4, String strId) {
         mainContext = con;
         param1 = str1;
         param2 = str2;
         param3 = str3;
         param4 = str4;
+        paramId = strId;
         urlVote = false;
     }
 
@@ -74,6 +76,7 @@ public class UploadVote extends AsyncTask<String, Void, String> {
                 entity.addPart("name", new StringBody(param2));
                 entity.addPart("adresse", new StringBody(param3));
                 entity.addPart("telnr", new StringBody(param4));
+                entity.addPart("ciid", new StringBody(paramId));
             }
             Log.d(TAG, "**Vote** - Strings wurden zum POST hinzugefügt.");
 
@@ -141,25 +144,10 @@ public class UploadVote extends AsyncTask<String, Void, String> {
                 if (strSize == 6) {
                     telnr = strSplit[5];
                 }
-                /*if (!strSplit[step].equals("2")) {
-                    name = strSplit[step];
-                    step = step+2;
-                } else {
-                    step = step+1;
-                }
-
-                if (!strSplit[step].equals("3")) {
-                    adresse = strSplit[step];
-                    step = step+2;
-                } else {
-                    step = step+1;
-                }
-
-                if((step-1) < strSize) {
-                    telnr = strSplit[step];
-                }*/
                 MainActivity main = (MainActivity) mainContext;
                 main.setContact(name, adresse, telnr);
+            } else if (result.contains("DBVote")) {
+                Log.d(TAG, "**Vote** - Vote updated!");
             } else {
                 Log.d(TAG, "**Vote** - Empty String returned!");
             }

@@ -93,6 +93,7 @@ public final class MainActivity extends AppCompatActivity {
     private Button bEdit;
     private String rsFaceID;
     private String instanceID;
+    private String checkContact;
     private int editUpdated;
     private EditText tbName;
     private EditText tbAdresse;
@@ -198,8 +199,12 @@ public final class MainActivity extends AppCompatActivity {
         String txtAdresse = tbAdresse.getText().toString();
         String txtTel = tbTel.getText().toString();
 
+        String changedContact = txtName + txtAdresse + txtTel;
+
         if(!TextUtils.isEmpty(txtName) || !TextUtils.isEmpty(txtAdresse) || !TextUtils.isEmpty(txtTel)) {
-            new UploadVote(MainActivity.this, rsFaceID, txtName, txtAdresse, txtTel).execute();
+            if (!changedContact.equals(checkContact)) {
+                new UploadVote(MainActivity.this, rsFaceID, txtName, txtAdresse, txtTel, instanceID).execute();
+            }
         }
 
         restartLifeCycle();
@@ -211,7 +216,7 @@ public final class MainActivity extends AppCompatActivity {
      */
     public void onClickEdit(View view) {
         if (editUpdated == 0) {
-            new UploadVote(MainActivity.this, rsFaceID, "", "", "").execute();
+            new UploadVote(MainActivity.this, rsFaceID, "", "", "", "").execute();
             editUpdated = 1;
         }
         if(lcontacts.getVisibility() == View.GONE) {
@@ -319,6 +324,7 @@ public final class MainActivity extends AppCompatActivity {
         tbName.setText(name);
         tbAdresse.setText(adresse);
         tbTel.setText(tel);
+        checkContact = name + adresse + tel;
     }
 
     /**
