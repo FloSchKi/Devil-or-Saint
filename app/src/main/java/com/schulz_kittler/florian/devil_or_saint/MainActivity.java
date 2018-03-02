@@ -2,8 +2,10 @@ package com.schulz_kittler.florian.devil_or_saint;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -40,6 +42,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Size;
+import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.view.Display;
 import android.view.Surface;
@@ -57,6 +60,7 @@ import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.iid.InstanceID;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
+import com.google.android.gms.vision.Frame;
 import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
@@ -79,11 +83,13 @@ import java.util.concurrent.TimeUnit;
  * Activity for the face tracker app.  This app detects faces with the rear facing camera, and draws
  * overlay graphics to indicate the position, size, and ID of each face.
  */
+@SuppressWarnings("deprecation")
 public final class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
 
     private CameraSource mCameraSource = null;
+    private FaceDetector detector;
     private CameraSourcePreview mPreview;
     private GraphicOverlay mGraphicOverlay;
     private TableLayout lcontacts;
@@ -95,10 +101,17 @@ public final class MainActivity extends AppCompatActivity {
     private String instanceID;
     private String checkContact;
     private int editUpdated;
+    private int cBackOrientation;
+    private int cFrontOrientation;
+    private int currentOrientation;
+    private int numberCameras;
+    private int cameraFacing;
+    private boolean lockPress;
     private EditText tbName;
     private EditText tbAdresse;
     private EditText tbTel;
     private FaceGraphic fGraphic;
+    private FaceGraphic pFaceGraphic;
 
     private static final int RC_HANDLE_GMS = 9001;
     private static final int REQUEST_CAMERA = 1;
@@ -137,8 +150,42 @@ public final class MainActivity extends AppCompatActivity {
         bEdit.setClickable(false);
 
         editUpdated = 0;
+        lockPress = false;
+        cameraFacing = CameraSource.CAMERA_FACING_BACK;
 
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
+        mGraphicOverlay.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                if (!lockPress && numberCameras > 1) {
+                    mCameraSource.release();
+                    detector.release();
+                    if(cameraFacing == CameraSource.CAMERA_FACING_BACK) {
+                        cameraFacing = CameraSource.CAMERA_FACING_FRONT;
+                        currentOrientation = cFrontOrientation;
+                    } else {
+                        cameraFacing = CameraSource.CAMERA_FACING_BACK;
+                        currentOrientation = cBackOrientation;
+                    }
+                    createCameraSource(cameraFacing);
+                    startCameraSource();
+                }
+                Log.d(TAG, "Camera switched!");
+                return true;
+            }
+        });
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        //setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
+        Camera.CameraInfo info = new Camera.CameraInfo();
+        Camera.getCameraInfo(0, info);
+        cBackOrientation = getCorrectCameraOrientation(info);
+        numberCameras = Camera.getNumberOfCameras();
+        if (numberCameras > 1) {
+            Camera.getCameraInfo(1, info);
+            cFrontOrientation = getCorrectCameraOrientation(info);
+            Log.d(TAG, "BackOrientation: " + cBackOrientation + ", FrontOrientation: " + cFrontOrientation);
+        }
+        currentOrientation = cBackOrientation;
 
         instanceID = InstanceID.getInstance(getApplicationContext()).getId();
         //instanceID = "abcdefghij2";
@@ -166,9 +213,133 @@ public final class MainActivity extends AppCompatActivity {
         // permission is not granted yet, request permission.
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-            createCameraSource();
+            createCameraSource(cameraFacing);
         } else {
             requestAllPermissions();
+        }
+    }
+
+    public int getCorrectCameraOrientation(Camera.CameraInfo info) {
+
+        int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
+        int degrees = 0;
+
+        switch(rotation){
+            case Surface.ROTATION_0:
+                degrees = 0;
+                break;
+
+            case Surface.ROTATION_90:
+                degrees = 90;
+                break;
+
+            case Surface.ROTATION_180:
+                degrees = 180;
+                break;
+
+            case Surface.ROTATION_270:
+                degrees = 270;
+                break;
+
+        }
+
+        int result;
+        if(info.facing==Camera.CameraInfo.CAMERA_FACING_FRONT){
+            result = (info.orientation + degrees) % 360;
+        }else{
+            result = (info.orientation - degrees + 360) % 360;
+        }
+
+        return result;
+    }
+
+    public void onClickPicture(View view) {
+        if(!lockPress) {
+            mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
+                @Override
+                public void onPictureTaken(byte[] bytes) {
+                    lockPress = true;
+                    /*BitmapFactory.Options opt = new BitmapFactory.Options();
+                    opt.inSampleSize = 2;*/
+                    Log.d(TAG, "Tapped on Screen");
+                    Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    onPause();
+
+                    if (currentOrientation != 0.0f) {
+                        int width = bmp.getWidth();
+                        int height = bmp.getHeight();
+
+                        Matrix matrix = new Matrix();
+                        matrix.postRotate(currentOrientation);
+
+                        bmp = Bitmap.createBitmap(bmp, 0, 0, width, height, matrix, true);
+                    }
+
+                    FaceDetector faceDetector = new FaceDetector.Builder((Context) MainActivity.this)
+                            .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
+                            .setMode(FaceDetector.ACCURATE_MODE)
+                            .setLandmarkType(FaceDetector.ALL_LANDMARKS)
+                            .setTrackingEnabled(true)
+                            .build();
+
+                    Bitmap tmp = Bitmap.createScaledBitmap(bmp, 480, 640, false);
+
+                    Frame frame = new Frame.Builder().setBitmap(tmp).build();
+
+                    SparseArray<Face> faces = faceDetector.detect(frame);
+                    tmp.recycle();
+
+                    if (faces.size() < 1) {
+                        onResume();
+                        Toast.makeText((Context) MainActivity.this, "Error: No Face detected!", Toast.LENGTH_SHORT).show();
+                        lockPress = false;
+                        return;
+                    }
+
+                    Face biggest = null;
+                    boolean leftEye = false;
+                    boolean rightEye = false;
+                    for (int i = 0; i < faces.size(); ++i) {
+                        Face face = faces.valueAt(i);
+                        for (Landmark landmark : face.getLandmarks()) {
+                            if(landmark.getType() == Landmark.LEFT_EYE) {
+                                leftEye = true;
+                            }
+                            if(landmark.getType() == Landmark.RIGHT_EYE) {
+                                rightEye = true;
+                            }
+                        }
+                        if (leftEye && rightEye) {
+                            if (biggest != null) {
+                                if (face.getHeight() > biggest.getHeight()) {
+                                    biggest = face;
+                                }
+                            } else {
+                                biggest = face;
+                            }
+                        }
+                        leftEye = false;
+                        rightEye = false;
+                    }
+                    faceDetector.release();
+
+                    if(biggest == null) {
+                        onResume();
+                        Toast.makeText((Context) MainActivity.this, "Error: No Face detected!", Toast.LENGTH_SHORT).show();
+                        lockPress = false;
+                        return;
+                    }
+
+                    mGraphicOverlay.add(pFaceGraphic);
+
+                    new UploadFileToServer(MainActivity.this, pFaceGraphic, biggest, instanceID).execute(bmp);
+
+                    Bitmap tmp2 = bmp.copy(Bitmap.Config.RGB_565,true);
+                    Canvas canvas = new Canvas(tmp2);
+                    mPreview.getSurfaceView().draw(canvas);
+
+                }
+            });
         }
     }
 
@@ -247,6 +418,7 @@ public final class MainActivity extends AppCompatActivity {
         lcontacts.setVisibility(View.GONE);
 
         editUpdated = 0;
+        lockPress = false;
 
         if (fGraphic != null) {
             fGraphic.setDevilOrSaint(0);
@@ -329,6 +501,10 @@ public final class MainActivity extends AppCompatActivity {
         checkContact = name + adresse + tel;
     }
 
+    public void setFaceGraphic(FaceGraphic f) {
+        pFaceGraphic = f;
+    }
+
     /**
      * Handles the requesting of the camera permission.  This includes
      * showing a "Snackbar" message of why the permission is needed then
@@ -368,14 +544,14 @@ public final class MainActivity extends AppCompatActivity {
      * to other detection examples to enable the barcode detector to detect small barcodes
      * at long distances.
      */
-    private void createCameraSource() {
+    private void createCameraSource(int facing) {
 
         Context context = getApplicationContext();
-        FaceDetector detector = new FaceDetector.Builder(context)
+        detector = new FaceDetector.Builder(context)
                 .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
                 .setMode(FaceDetector.ACCURATE_MODE)
                 .setLandmarkType(FaceDetector.ALL_LANDMARKS)
-                .setProminentFaceOnly(true)
+                .setMinFaceSize(0.2f) //faces bigger than 35% of Image are detected; use setMinFaceSize() instead
                 .setTrackingEnabled(true)
                 .build();
 
@@ -399,9 +575,18 @@ public final class MainActivity extends AppCompatActivity {
 
         mCameraSource = new CameraSource.Builder(context, detector)
                 .setRequestedPreviewSize(640, 480)
-                .setFacing(CameraSource.CAMERA_FACING_BACK)
+                .setFacing(facing)
                 .setRequestedFps(30.0f)
                 .build();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage("Automatically snaps photo if face is detected.\nAlternative:\nTap Screen to take photo.\nLong Press to switch Camera.")
+                .setCancelable(false)
+                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {}
+                });
+        AlertDialog alert = builder.create();
+        alert.show();
     }
 
     /**
@@ -466,7 +651,7 @@ public final class MainActivity extends AppCompatActivity {
                         && perms.get(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
                         && perms.get(Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
 
-                    createCameraSource();
+                    createCameraSource(cameraFacing);
                 } else {
 
                     Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT).show();
@@ -515,9 +700,17 @@ public final class MainActivity extends AppCompatActivity {
     //==============================================================================================
 
     public class FaceTracker extends Tracker<Face> {
-        private GraphicOverlay mOverlay = mGraphicOverlay;
-        private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
+        //private GraphicOverlay mOverlay = mGraphicOverlay;
+        //private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
+        private GraphicOverlay mOverlay;
+        private FaceGraphic mFaceGraphic;
         private int countA = 0;
+
+        public FaceTracker() {
+            mOverlay = mGraphicOverlay;
+            mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
+            MainActivity.this.setFaceGraphic(mFaceGraphic);
+        }
 
         @Override
         public void onNewItem(int faceId, Face item) {
@@ -583,11 +776,12 @@ public final class MainActivity extends AppCompatActivity {
             mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
+                    lockPress = true;
                     /*BitmapFactory.Options opt = new BitmapFactory.Options();
                     opt.inSampleSize = 2;*/
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
 
-                    bmp = rotateClockBitmap(bmp, 90);
+                    bmp = rotateClockBitmap(bmp, currentOrientation);
                     //Bitmap grayFace = grayFaceBitmap(bmp, face);
                     //Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
 
@@ -627,16 +821,18 @@ public final class MainActivity extends AppCompatActivity {
          * @return          rotated bitmap is returned.
          */
         public Bitmap rotateClockBitmap(Bitmap original, float degrees) {
-            int width = original.getWidth();
-            int height = original.getHeight();
+            if (degrees != 0.0f) {
+                int width = original.getWidth();
+                int height = original.getHeight();
 
-            Matrix matrix = new Matrix();
-            matrix.postRotate(degrees);
+                Matrix matrix = new Matrix();
+                matrix.postRotate(degrees);
 
-            //Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
-            original = Bitmap.createBitmap(original, 0, 0, width, height, matrix, true);
+                //Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
+                original = Bitmap.createBitmap(original, 0, 0, width, height, matrix, true);
             /*Canvas canvas = new Canvas(rotatedBitmap);
             canvas.drawBitmap(original, 0.0f, 0.0f, null);*/
+            }
 
             return original;
         }

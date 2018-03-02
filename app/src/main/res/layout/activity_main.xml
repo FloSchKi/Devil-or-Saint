@@ -84,7 +84,8 @@
         <com.schulz_kittler.florian.devil_or_saint.camera.GraphicOverlay
             android:id="@+id/faceOverlay"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:onClick="onClickPicture"/>
 
     </com.schulz_kittler.florian.devil_or_saint.camera.CameraSourcePreview>
 

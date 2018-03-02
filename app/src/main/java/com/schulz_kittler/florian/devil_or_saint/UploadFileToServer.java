@@ -138,22 +138,16 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         int vote = 3;
         int credits = 0;
         boolean error = false;
+        boolean faceError = false;
         String faceID = "";
         if (result == null) {
             Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Null");
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
             error = true;
         }
         else if (result.contains("Error")) {
             Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Error: " + result);
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if (result.contains("a face")) {
+                faceError = true;
             }
             error = true;
         } else {
@@ -177,7 +171,11 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         }
         mDialog.dismiss();
         if(error) {
-            Toast.makeText(mainContext, "An Error occured! Please try again.", Toast.LENGTH_SHORT).show();
+            if(faceError) {
+                Toast.makeText(mainContext, "Error: Server didn't detect a face! Please try again.", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(mainContext, "An Error occured! Please try again.", Toast.LENGTH_SHORT).show();
+            }
             MainActivity main = (MainActivity) mainContext;
             main.restartLifeCycle();
         }
