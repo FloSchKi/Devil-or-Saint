@@ -5,7 +5,7 @@
     <string name="no_camera_permission">This application needs the camera permission to automatically detect and photograph faces. The application will now exit.</string>
     <string name="no_storage_permission">This application needs the storage permission to temporarily store images on the device. The application will now exit.</string>
     <string name="low_storage_error">Face detector dependencies cannot be downloaded due to low device storage</string>
-    <string name="permission_camera_storage_rationale">Camera and storage permissions are essential for this Application to run properly!</string>
+    <string name="permission_camera_storage_rationale">Camera permission is essential for this Application to run properly!</string>
     <string name="rbtnDevil">Devil</string>
     <string name="rbtnSaint">Saint</string>
     <string name="rbtnDone">Done</string>

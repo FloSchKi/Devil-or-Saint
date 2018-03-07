@@ -1,9 +1,5 @@
 package com.schulz_kittler.florian.devil_or_saint.camera;
 
-/**
- * Created by Schulz on 26.06.2017.
- */
-
 import android.content.Context;
 import android.graphics.Canvas;
 import android.util.AttributeSet;
@@ -28,9 +24,6 @@ import java.util.Set;
  * <ol>
  * <li>{@link Graphic#scaleX(float)} and {@link Graphic#scaleY(float)} adjust the size of the
  * supplied value from the preview scale to the view scale.</li>
- * <li>{@link Graphic#translateX(float)} and {@link Graphic#translateY(float)} adjust the coordinate
- * from the preview's coordinate system to the view coordinate system.</li>
- * </ol>
  */
 public class GraphicOverlay extends View {
     private final Object mLock = new Object();
@@ -59,9 +52,6 @@ public class GraphicOverlay extends View {
          * <ol>
          * <li>{@link Graphic#scaleX(float)} and {@link Graphic#scaleY(float)} adjust the size of
          * the supplied value from the preview scale to the view scale.</li>
-         * <li>{@link Graphic#translateX(float)} and {@link Graphic#translateY(float)} adjust the
-         * coordinate from the preview's coordinate system to the view coordinate system.</li>
-         * </ol>
          *
          * @param canvas drawing canvas
          */
@@ -80,26 +70,6 @@ public class GraphicOverlay extends View {
          */
         public float scaleY(float vertical) {
             return vertical * mOverlay.mHeightScaleFactor;
-        }
-
-        /**
-         * Adjusts the x coordinate from the preview's coordinate system to the view coordinate
-         * system.
-         */
-        public float translateX(float x) {
-            if (mOverlay.mFacing == CameraSource.CAMERA_FACING_FRONT) {
-                return mOverlay.getWidth() - scaleX(x);
-            } else {
-                return scaleX(x);
-            }
-        }
-
-        /**
-         * Adjusts the y coordinate from the preview's coordinate system to the view coordinate
-         * system.
-         */
-        public float translateY(float y) {
-            return scaleY(y);
         }
 
         public void postInvalidate() {

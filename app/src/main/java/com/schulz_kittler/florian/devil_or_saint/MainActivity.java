@@ -12,46 +12,20 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
-import android.graphics.ImageFormat;
 import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.Point;
-import android.graphics.PointF;
-import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
-import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.params.StreamConfigurationMap;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.Size;
 import android.util.SparseArray;
-import android.util.SparseIntArray;
-import android.view.Display;
 import android.view.Surface;
-import android.view.SurfaceView;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ProgressBar;
 import android.widget.TableLayout;
 import android.widget.Toast;
 
@@ -61,7 +35,6 @@ import com.google.android.gms.iid.InstanceID;
 import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.Frame;
-import com.google.android.gms.vision.MultiProcessor;
 import com.google.android.gms.vision.Tracker;
 import com.google.android.gms.vision.face.Face;
 import com.google.android.gms.vision.face.FaceDetector;
@@ -80,8 +53,10 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Activity for the face tracker app.  This app detects faces with the rear facing camera, and draws
- * overlay graphics to indicate the position, size, and ID of each face.
+ * Activity for the face tracker app.  This app detects and recognizes faces and draws face filter overlays over them.
+ * If enough positive votes are present, a halo is drawn above the head.
+ * If enough negative votes are present, devil horns are drawn onto the forehead.
+ * After the vote it is possible to provide further information about the face to earn credits.
  */
 @SuppressWarnings("deprecation")
 public final class MainActivity extends AppCompatActivity {
@@ -97,16 +72,17 @@ public final class MainActivity extends AppCompatActivity {
     private Button bSaint;
     private Button bDone;
     private Button bEdit;
-    private String rsFaceID;
-    private String instanceID;
+    private String rsFaceID;    // ID of the detected Face
+    private String instanceID;  // randomly generated ID. Identifies the App running on a device. Resets if device is factory reseted.
     private String checkContact;
-    private int editUpdated;
+    private int editUpdated;    // variable used to check if the edit button was clicked before
     private int cBackOrientation;
     private int cFrontOrientation;
-    private int currentOrientation;
+    private int currentOrientation; // orientation to rotate the image correctly
     private int numberCameras;
     private int cameraFacing;
-    private boolean lockPress;
+    private boolean lockPress;  // disables the functions to switch camera and take photo
+    private boolean autoFaceDetection;  // enable or disable the function to automatically take a picture if a face is detected
     private EditText tbName;
     private EditText tbAdresse;
     private EditText tbTel;
@@ -114,21 +90,18 @@ public final class MainActivity extends AppCompatActivity {
     private FaceGraphic pFaceGraphic;
 
     private static final int RC_HANDLE_GMS = 9001;
-    private static final int REQUEST_CAMERA = 1;
     private static final int REQUEST_CAMERA_STORAGE_PERM = 2;
 
-    //==============================================================================================
-    // Activity Methods
-    //==============================================================================================
-
     /**
-     * Initializes the UI and initiates the creation of a face detector.
+     * Initializes the UI, sets the visibility of all buttons and layouts,
+     * checks the orientation of the cameras and initiates the creation of a face detector.
      */
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
         setContentView(R.layout.activity_main);
 
+        // inits the Layouts, Textboxes and Buttons
         mPreview = (CameraSourcePreview) findViewById(R.id.preview);
         mGraphicOverlay = (GraphicOverlay) findViewById(R.id.faceOverlay);
         lcontacts = (TableLayout) findViewById(R.id.lcontact);
@@ -151,9 +124,13 @@ public final class MainActivity extends AppCompatActivity {
 
         editUpdated = 0;
         lockPress = false;
-        cameraFacing = CameraSource.CAMERA_FACING_BACK;
+        autoFaceDetection = false;  // disables or enables the automatic photo feature
+        cameraFacing = CameraSource.CAMERA_FACING_BACK; // starts the camera with the back facing camera
 
         mGraphicOverlay.setOnLongClickListener(new View.OnLongClickListener() {
+            /**
+             * switches the camera between facing back and facing front
+             */
             @Override
             public boolean onLongClick(View v) {
                 if (!lockPress && numberCameras > 1) {
@@ -174,51 +151,78 @@ public final class MainActivity extends AppCompatActivity {
             }
         });
 
+        // locks the device in portrait mode
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        //setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR); //Shut off screen rotation
+
+        // get the correct orientation of the back facing camera
         Camera.CameraInfo info = new Camera.CameraInfo();
         Camera.getCameraInfo(0, info);
         cBackOrientation = getCorrectCameraOrientation(info);
+
+        // if a front facing camera exists, get the correct orientation
         numberCameras = Camera.getNumberOfCameras();
         if (numberCameras > 1) {
             Camera.getCameraInfo(1, info);
             cFrontOrientation = getCorrectCameraOrientation(info);
             Log.d(TAG, "BackOrientation: " + cBackOrientation + ", FrontOrientation: " + cFrontOrientation);
         }
+
+        // sets the current camera orientation
         currentOrientation = cBackOrientation;
 
+        // change this variable to simulate a vote from another device e.g.: instanceID = "abcdefghij2";
         instanceID = InstanceID.getInstance(getApplicationContext()).getId();
-        //instanceID = "abcdefghij2";
-
-        /*Size[] sizes = null;
-        try {
-            CameraManager cm = (CameraManager) this.getSystemService(Context.CAMERA_SERVICE);
-            for (String cameraId : cm.getCameraIdList()) {
-                CameraCharacteristics cameraCharacteristics =
-                        cm.getCameraCharacteristics(cameraId);
-                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) ==
-                        CameraMetadata.LENS_FACING_BACK) {
-                    StreamConfigurationMap streamConfigurationMap = cameraCharacteristics.get(
-                            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                    sizes = streamConfigurationMap.getOutputSizes(ImageFormat.JPEG);
-                }
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }*/
-
-        //cspSurfaceView = mPreview.getSurfaceView();
 
         // Check for the camera permission before accessing the camera.  If the
         // permission is not granted yet, request permission.
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+        // creates and starts camera afterwards.
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             createCameraSource(cameraFacing);
         } else {
             requestAllPermissions();
         }
     }
 
+    /**
+     * Resets all the variables needed to restart the lifecycle of the App
+     */
+    public void restartLifeCycle() {
+        // reset Buttons to default
+        bDevil.setBackgroundColor(Color.argb(255,255,68,68));
+        bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
+
+        bDevil.setEnabled(false);
+        bSaint.setEnabled(false);
+        bDevil.setClickable(false);
+        bSaint.setClickable(false);
+
+        bDone.setClickable(false);
+        bDone.setVisibility(Button.INVISIBLE);
+        bEdit.setClickable(false);
+        bEdit.setVisibility(View.INVISIBLE);
+
+        // Clears Textboxes
+        tbName.setText("");
+        tbAdresse.setText("");
+        tbTel.setText("");
+        lcontacts.setVisibility(View.GONE);
+
+        editUpdated = 0;
+        lockPress = false;
+
+        // removes Face filter
+        if (fGraphic != null) {
+            fGraphic.setDevilOrSaint(0);
+        }
+        // starts the camera
+        onResume();
+    }
+
+    /**
+     * Checks the camera orientation with the provided Parameter and returns the degrees to correctly rotate the image.
+     * @param info the properties of the provided camera
+     * @return  the degrees to correctly rotate the image if a photo has been taken.
+     */
     public int getCorrectCameraOrientation(Camera.CameraInfo info) {
 
         int rotation = this.getWindowManager().getDefaultDisplay().getRotation();
@@ -253,28 +257,34 @@ public final class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * Takes a picture, rotates it and tries to find a face in it.
+     * If a face is detected the image is sent to the server and is processed to recognize a face.
+     *
+     * @param view the view of the App
+     */
     public void onClickPicture(View view) {
         if(!lockPress) {
             mCameraSource.takePicture(null, new CameraSource.PictureCallback() {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
-                    lockPress = true;
-                    /*BitmapFactory.Options opt = new BitmapFactory.Options();
-                    opt.inSampleSize = 2;*/
-                    Log.d(TAG, "Tapped on Screen");
-                    Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    onPause();
+                    lockPress = true;   // prevents the user to snap multiple pictures
 
-                    if (currentOrientation != 0.0f) {
+                    Log.d(TAG, "Manual picture taken.");
+                    Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    onPause();  // pauses the camera
+
+                    if (currentOrientation != 0.0f) {   // checks if the image needs to be rotated
                         int width = bmp.getWidth();
                         int height = bmp.getHeight();
 
                         Matrix matrix = new Matrix();
                         matrix.postRotate(currentOrientation);
 
-                        bmp = Bitmap.createBitmap(bmp, 0, 0, width, height, matrix, true);
+                        bmp = Bitmap.createBitmap(bmp, 0, 0, width, height, matrix, true);  // rotates image
                     }
 
+                    // starts a face detector in accuracy mode and searchs for all Landmarks in the face
                     FaceDetector faceDetector = new FaceDetector.Builder((Context) MainActivity.this)
                             .setClassificationType(FaceDetector.ALL_CLASSIFICATIONS)
                             .setMode(FaceDetector.ACCURATE_MODE)
@@ -282,13 +292,14 @@ public final class MainActivity extends AppCompatActivity {
                             .setTrackingEnabled(true)
                             .build();
 
-                    Bitmap tmp = Bitmap.createScaledBitmap(bmp, 480, 640, false);
+                    Bitmap tmp = Bitmap.createScaledBitmap(bmp, 480, 640, false);   // downsizes the image for the detector for faster processing
 
                     Frame frame = new Frame.Builder().setBitmap(tmp).build();
 
-                    SparseArray<Face> faces = faceDetector.detect(frame);
+                    SparseArray<Face> faces = faceDetector.detect(frame);   // returns detected faces
                     tmp.recycle();
 
+                    // Checks if a face is detected. If no face is detected shows an error message and restarts the camera
                     if (faces.size() < 1) {
                         onResume();
                         Toast.makeText((Context) MainActivity.this, "Error: No Face detected!", Toast.LENGTH_SHORT).show();
@@ -299,6 +310,8 @@ public final class MainActivity extends AppCompatActivity {
                     Face biggest = null;
                     boolean leftEye = false;
                     boolean rightEye = false;
+
+                    // Checks all detected faces for the needed Landmarks and return the biggest face in the image
                     for (int i = 0; i < faces.size(); ++i) {
                         Face face = faces.valueAt(i);
                         for (Landmark landmark : face.getLandmarks()) {
@@ -321,8 +334,10 @@ public final class MainActivity extends AppCompatActivity {
                         leftEye = false;
                         rightEye = false;
                     }
+
                     faceDetector.release();
 
+                    // If no suitable face is detected, returns an error message and restarts the camera
                     if(biggest == null) {
                         onResume();
                         Toast.makeText((Context) MainActivity.this, "Error: No Face detected!", Toast.LENGTH_SHORT).show();
@@ -332,8 +347,10 @@ public final class MainActivity extends AppCompatActivity {
 
                     mGraphicOverlay.add(pFaceGraphic);
 
+                    // AsyncTask is started to send the image to the server and get a response
                     new UploadFileToServer(MainActivity.this, pFaceGraphic, biggest, instanceID).execute(bmp);
 
+                    // in the meantime the catured image is shown to the user
                     Bitmap tmp2 = bmp.copy(Bitmap.Config.RGB_565,true);
                     Canvas canvas = new Canvas(tmp2);
                     mPreview.getSurfaceView().draw(canvas);
@@ -344,98 +361,15 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Highlights the Devil button and sends vote to Server
-     * @param view
-     */
-    public void onClickDevil(View view) {
-        new UploadVote(rsFaceID, instanceID, "1").execute();
-        changeButtonStatus(1);
-    }
-
-    /**
-     * Highlights the Saint button and sends vote to Server
-     * @param view
-     */
-    public void onClickSaint(View view) {
-        new UploadVote(rsFaceID, instanceID, "2").execute();
-        changeButtonStatus(2);
-    }
-
-    /**
-     * Closes the image and resumes the Camera to detect the next face
-     * @param view
-     */
-    public void onClickDone(View view) {
-        String txtName = tbName.getText().toString();
-        String txtAdresse = tbAdresse.getText().toString();
-        String txtTel = tbTel.getText().toString();
-
-        String changedContact = txtName + txtAdresse + txtTel;
-
-        if(!TextUtils.isEmpty(txtName) || !TextUtils.isEmpty(txtAdresse) || !TextUtils.isEmpty(txtTel)) {
-            if (!changedContact.equals(checkContact)) {
-                new UploadVote(MainActivity.this, rsFaceID, txtName, txtAdresse, txtTel, instanceID).execute();
-            }
-        }
-
-        restartLifeCycle();
-    }
-
-    /**
-     * Opens the Panel to edit the Information of the Face
-     * @param view
-     */
-    public void onClickEdit(View view) {
-        if (editUpdated == 0) {
-            new UploadVote(MainActivity.this, rsFaceID, "", "", "", "").execute();
-            editUpdated = 1;
-        }
-        if(lcontacts.getVisibility() == View.GONE) {
-            lcontacts.setVisibility(View.VISIBLE);
-        } else {
-            lcontacts.setVisibility(View.GONE);
-        }
-    }
-
-    public void restartLifeCycle() {
-        //reset Buttons to default
-        bDevil.setBackgroundColor(Color.argb(255,255,68,68));
-        bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
-
-        bDevil.setEnabled(false);
-        bSaint.setEnabled(false);
-        bDevil.setClickable(false);
-        bSaint.setClickable(false);
-
-        bDone.setClickable(false);
-        bDone.setVisibility(Button.INVISIBLE);
-        bEdit.setClickable(false);
-        bEdit.setVisibility(View.INVISIBLE);
-
-        tbName.setText("");
-        tbAdresse.setText("");
-        tbTel.setText("");
-        lcontacts.setVisibility(View.GONE);
-
-        editUpdated = 0;
-        lockPress = false;
-
-        if (fGraphic != null) {
-            fGraphic.setDevilOrSaint(0);
-        }
-        onResume();
-    }
-
-    /**
-     * Enables or disables the two Buttons and sets the previously selected button
-     * @param vote can only have four different values:
+     * Enables or disables the Buttons and sets the previously selected button
+     * @param vote can only have three different values:
      *             0 = face not rated previously
      *             1 = face rated with devil previously
      *             2 = face rated with saint previously
-     *             3 = error
      */
     public void changeButtonStatus(Integer vote) {
         if (vote == 0) {
+            // enables the two buttons to take a vote
             bDevil.setEnabled(true);
             bSaint.setEnabled(true);
             bDevil.setClickable(true);
@@ -449,7 +383,7 @@ public final class MainActivity extends AppCompatActivity {
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
             bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
         } else if (vote == 1) {
-            //disable buttons if previously voted
+            // disable buttons if previously voted
             bDevil.setEnabled(false);
             bSaint.setEnabled(false);
             bDevil.setClickable(false);
@@ -459,13 +393,12 @@ public final class MainActivity extends AppCompatActivity {
             bDone.setVisibility(Button.VISIBLE);
             bEdit.setClickable(true);
             bEdit.setVisibility(View.VISIBLE);
-            //lcontacts.setVisibility(View.VISIBLE);
 
-            //last choice is highlighted
+            // last choice is highlighted
             bDevil.setBackgroundColor(Color.argb(255,255,68,68));
             bSaint.setBackgroundColor(Color.GRAY);
         } else if (vote == 2) {
-            //disable buttons if previously voted
+            // disable buttons if previously voted
             bDevil.setEnabled(false);
             bSaint.setEnabled(false);
             bDevil.setClickable(false);
@@ -475,9 +408,8 @@ public final class MainActivity extends AppCompatActivity {
             bDone.setVisibility(Button.VISIBLE);
             bEdit.setClickable(true);
             bEdit.setVisibility(View.VISIBLE);
-            //lcontacts.setVisibility(View.VISIBLE);
 
-            //last choice is highlighted
+            // last choice is highlighted
             bDevil.setBackgroundColor(Color.GRAY);
             bSaint.setBackgroundColor(Color.argb(255, 255, 187, 51));
         } else {
@@ -486,38 +418,17 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * The recognized face ID is passed to the MainActivity
-     * @param faceID a random ID inside a string.
-     */
-    public void setButtonVariable(String faceID, FaceGraphic fg) {
-        rsFaceID = faceID;
-        fGraphic = fg;
-    }
-
-    public void setContact(String name, String adresse, String tel) {
-        tbName.setText(name);
-        tbAdresse.setText(adresse);
-        tbTel.setText(tel);
-        checkContact = name + adresse + tel;
-    }
-
-    public void setFaceGraphic(FaceGraphic f) {
-        pFaceGraphic = f;
-    }
-
-    /**
      * Handles the requesting of the camera permission.  This includes
      * showing a "Snackbar" message of why the permission is needed then
      * sending the request.
      */
     private void requestAllPermissions() {
-        Log.w(TAG, "Camera or Storage permission is not granted. Requesting permissions");
+        Log.w(TAG, "Camera permission is not granted. Requesting permission");
 
-        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.INTERNET};
+        final String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.INTERNET};
 
         if (!ActivityCompat.shouldShowRequestPermissionRationale(this,
                 Manifest.permission.CAMERA) || !ActivityCompat.shouldShowRequestPermissionRationale(this,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE) || !ActivityCompat.shouldShowRequestPermissionRationale(this,
                 Manifest.permission.INTERNET)) {
             ActivityCompat.requestPermissions(this, permissions, REQUEST_CAMERA_STORAGE_PERM);
             return;
@@ -540,9 +451,49 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Creates and starts the camera.  Note that this uses a higher resolution in comparison
-     * to other detection examples to enable the barcode detector to detect small barcodes
-     * at long distances.
+     * Callback for the result from requesting permissions. This method
+     * is invoked for every call on {@link #requestPermissions(String[], int)}.
+     * Note: It is possible that the permissions request interaction
+     * with the user is interrupted. In this case you will receive empty permissions
+     * and results arrays which should be treated as a cancellation.
+     *
+     * @param requestCode  The request code passed in {@link #requestPermissions(String[], int)}.
+     * @param permissions  The requested permissions. Never null.
+     * @param grantResults The grant results for the corresponding permissions
+     *                     which is either {@link PackageManager#PERMISSION_GRANTED}
+     *                     or {@link PackageManager#PERMISSION_DENIED}. Never null.
+     * @see #requestPermissions(String[], int)
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch(requestCode) {
+            case REQUEST_CAMERA_STORAGE_PERM: {
+                Map<String, Integer> perms = new HashMap<String, Integer>();
+                perms.put(Manifest.permission.CAMERA, PackageManager.PERMISSION_GRANTED);
+                perms.put(Manifest.permission.INTERNET, PackageManager.PERMISSION_GRANTED);
+
+                for(int i = 0; i < permissions.length; i++) {
+                    perms.put(permissions[i], grantResults[i]);
+                }
+
+                if(perms.get(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        && perms.get(Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
+
+                    createCameraSource(cameraFacing);
+                } else {
+
+                    Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT).show();
+                }
+            }
+            default: {
+                Log.e(TAG, "Got unexpected permission result: " + requestCode);
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            }
+        }
+    }
+
+    /**
+     * Creates and starts the camera.
      */
     private void createCameraSource(int facing) {
 
@@ -557,19 +508,11 @@ public final class MainActivity extends AppCompatActivity {
 
         detector.setProcessor(new LargestFaceFocusingProcessor(detector, new FaceTracker()));
 
-        /*detector.setProcessor(
-                new MultiProcessor.Builder<>(new GraphicFaceTrackerFactory())
-                        .build());*/
-
         if (!detector.isOperational()) {
             // Note: The first time that an app using face API is installed on a device, GMS will
             // download a native library to the device in order to do detection.  Usually this
             // completes before the app is run for the first time.  But if that download has not yet
             // completed, then the above call will not detect any faces.
-            //
-            // isOperational() can be used to check if the required native library is currently
-            // available.  The detector will automatically become operational once the library
-            // download completes on device.
             Log.w(TAG, "Face detector dependencies are not yet available.");
         }
 
@@ -579,14 +522,43 @@ public final class MainActivity extends AppCompatActivity {
                 .setRequestedFps(30.0f)
                 .build();
 
+        // Shows a dialog to give instructions.
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setMessage("Automatically snaps photo if face is detected.\nAlternative:\nTap Screen to take photo.\nLong Press to switch Camera.")
+        builder.setMessage("Tap Screen to take photo.\nLong Press to switch Camera.")
                 .setCancelable(false)
                 .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int id) {}
                 });
         AlertDialog alert = builder.create();
         alert.show();
+    }
+
+    /**
+     * Starts or restarts the camera source, if it exists.  If the camera source doesn't exist yet
+     * (e.g., because onResume was called before the camera source was created), this will be called
+     * again when the camera source is created.
+     */
+    private void startCameraSource() {
+
+        // checks if the device has play services available.
+        int code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(
+                getApplicationContext());
+        if (code != ConnectionResult.SUCCESS) {
+            Dialog dlg =
+                    GoogleApiAvailability.getInstance().getErrorDialog(this, code, RC_HANDLE_GMS);
+            dlg.show();
+        }
+
+        // checks if the CamerSource exists and starts it
+        if (mCameraSource != null) {
+            try {
+                mPreview.start(mCameraSource, mGraphicOverlay);
+            } catch (IOException e) {
+                Log.e(TAG, "Unable to start camera source.", e);
+                mCameraSource.release();
+                mCameraSource = null;
+            }
+        }
     }
 
     /**
@@ -621,90 +593,99 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Callback for the result from requesting permissions. This method
-     * is invoked for every call on {@link #requestPermissions(String[], int)}.
-     * Note: It is possible that the permissions request interaction
-     * with the user is interrupted. In this case you will receive empty permissions
-     * and results arrays which should be treated as a cancellation.
-     *
-     * @param requestCode  The request code passed in {@link #requestPermissions(String[], int)}.
-     * @param permissions  The requested permissions. Never null.
-     * @param grantResults The grant results for the corresponding permissions
-     *                     which is either {@link PackageManager#PERMISSION_GRANTED}
-     *                     or {@link PackageManager#PERMISSION_DENIED}. Never null.
-     * @see #requestPermissions(String[], int)
+     * Highlights the Devil button and sends vote to Server
+     * @param view
      */
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch(requestCode) {
-            case REQUEST_CAMERA_STORAGE_PERM: {
-                Map<String, Integer> perms = new HashMap<String, Integer>();
-                perms.put(Manifest.permission.CAMERA, PackageManager.PERMISSION_GRANTED);
-                perms.put(Manifest.permission.WRITE_EXTERNAL_STORAGE, PackageManager.PERMISSION_GRANTED);
-                perms.put(Manifest.permission.INTERNET, PackageManager.PERMISSION_GRANTED);
-
-                for(int i = 0; i < permissions.length; i++) {
-                    perms.put(permissions[i], grantResults[i]);
-                }
-
-                if(perms.get(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                        && perms.get(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-                        && perms.get(Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED) {
-
-                    createCameraSource(cameraFacing);
-                } else {
-
-                    Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT).show();
-                }
-            }
-            default: {
-                Log.d(TAG, "Got unexpected permission result: " + requestCode);
-                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            }
-        }
+    public void onClickDevil(View view) {
+        new UploadVote(rsFaceID, instanceID, "1").execute();
+        changeButtonStatus(1);
     }
-
-    //==============================================================================================
-    // Camera Source Preview
-    //==============================================================================================
 
     /**
-     * Starts or restarts the camera source, if it exists.  If the camera source doesn't exist yet
-     * (e.g., because onResume was called before the camera source was created), this will be called
-     * again when the camera source is created.
+     * Highlights the Saint button and sends vote to Server
+     * @param view
      */
-    private void startCameraSource() {
+    public void onClickSaint(View view) {
+        new UploadVote(rsFaceID, instanceID, "2").execute();
+        changeButtonStatus(2);
+    }
 
-        // check that the device has play services available.
-        int code = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(
-                getApplicationContext());
-        if (code != ConnectionResult.SUCCESS) {
-            Dialog dlg =
-                    GoogleApiAvailability.getInstance().getErrorDialog(this, code, RC_HANDLE_GMS);
-            dlg.show();
+    /**
+     * Closes the image and resumes the Camera to detect the next face.
+     * If further contact infos are present, sends them to the server.
+     * @param view
+     */
+    public void onClickDone(View view) {
+        String txtName = tbName.getText().toString();
+        String txtAdresse = tbAdresse.getText().toString();
+        String txtTel = tbTel.getText().toString();
+
+        String changedContact = txtName + txtAdresse + txtTel;
+
+        if(!TextUtils.isEmpty(txtName) || !TextUtils.isEmpty(txtAdresse) || !TextUtils.isEmpty(txtTel)) {
+            if (!changedContact.equals(checkContact)) {
+                new UploadVote(MainActivity.this, rsFaceID, txtName, txtAdresse, txtTel, instanceID).execute();
+            }
         }
 
-        if (mCameraSource != null) {
-            try {
-                mPreview.start(mCameraSource, mGraphicOverlay);
-            } catch (IOException e) {
-                Log.e(TAG, "Unable to start camera source.", e);
-                mCameraSource.release();
-                mCameraSource = null;
-            }
+        restartLifeCycle();
+    }
+
+    /**
+     * Opens the Panel to edit the Information of the Face.
+     * @param view
+     */
+    public void onClickEdit(View view) {
+        if (editUpdated == 0) { // if the button is pressed form the first time, retrieves all available contact infos
+            new UploadVote(MainActivity.this, rsFaceID, "", "", "", "").execute();
+            editUpdated = 1;    // contact infos are retrieved once for every face
+        }
+        // sets the visibility of the contact info area
+        if(lcontacts.getVisibility() == View.GONE) {
+            lcontacts.setVisibility(View.VISIBLE);
+        } else {
+            lcontacts.setVisibility(View.GONE);
         }
     }
 
-    //==============================================================================================
-    // My Face Tracker
-    //==============================================================================================
+    /**
+     * The recognized face ID and a FaceGraphic is passed to the MainActivity
+     * @param faceID a random ID inside a string.
+     */
+    public void setButtonVariable(String faceID, FaceGraphic fg) {
+        rsFaceID = faceID;
+        fGraphic = fg;
+    }
 
+    /**
+     * Sets the Contact info of the recognized Face
+     * @param name  //Name of the recognized Face
+     * @param adresse   //Addresse of the recognized Face
+     * @param tel   //Telephone number of the recognized Face
+     */
+    public void setContact(String name, String adresse, String tel) {
+        tbName.setText(name);
+        tbAdresse.setText(adresse);
+        tbTel.setText(tel);
+        checkContact = name + adresse + tel;
+    }
+
+    /**
+     * Setter for the provided FaceGraphic. Needed to update the face filter overlay.
+     * @param f
+     */
+    public void setFaceGraphic(FaceGraphic f) {
+        pFaceGraphic = f;
+    }
+
+    /**
+     * This class manages detected Faces.
+     * Adds new faces and removes them if they disappear.
+     */
     public class FaceTracker extends Tracker<Face> {
-        //private GraphicOverlay mOverlay = mGraphicOverlay;
-        //private FaceGraphic mFaceGraphic = new FaceGraphic(mOverlay, getApplicationContext());
         private GraphicOverlay mOverlay;
         private FaceGraphic mFaceGraphic;
-        private int countA = 0;
+        private int frameCount = 0;
 
         public FaceTracker() {
             mOverlay = mGraphicOverlay;
@@ -712,38 +693,52 @@ public final class MainActivity extends AppCompatActivity {
             MainActivity.this.setFaceGraphic(mFaceGraphic);
         }
 
+        /**
+         *
+         * @param faceId The ID of the newly detected face.
+         * @param item The detected face item.
+         */
         @Override
         public void onNewItem(int faceId, Face item) {
             mGraphicOverlay.setId(faceId);
         }
 
+        /**
+         * Is called if the face has updated in the current Frame.
+         *
+         * @param detections Detection result containing both detected faces and the associated frame metadata.
+         * @param face The detected face.
+         */
         @Override
         public void onUpdate(Detector.Detections<Face> detections, Face face) {
-            boolean leftEye = false;
-            boolean rightEye = false;
-            for (Landmark landmark : face.getLandmarks()) {
-                if(landmark.getType() == Landmark.LEFT_EYE) {
-                    leftEye = true;
-                }
-                if(landmark.getType() == Landmark.RIGHT_EYE) {
-                    rightEye = true;
-                }
-            }
+            if (autoFaceDetection) {
+                boolean leftEye = false;
+                boolean rightEye = false;
 
-            if (leftEye && rightEye) {
-                if (countA > 6) {
-                    mOverlay.add(mFaceGraphic);
-                    takePicture(face);
-                    //mFaceGraphic.setDevilOrSaint(1);
-                    mFaceGraphic.updateFace(face);
-                    countA = 0;
-                } else {
-                    try {
-                        TimeUnit.MILLISECONDS.sleep(10);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                //checks if the left and right Eye Landmark are detected
+                for (Landmark landmark : face.getLandmarks()) {
+                    if(landmark.getType() == Landmark.LEFT_EYE) {
+                        leftEye = true;
                     }
-                    countA++;
+                    if(landmark.getType() == Landmark.RIGHT_EYE) {
+                        rightEye = true;
+                    }
+                }
+
+                if (leftEye && rightEye) {
+                    if (frameCount > 6) {   //waits 6 frames for a better bounding box of the face and to focus the camera correctly
+                        mOverlay.add(mFaceGraphic);
+                        takePicture(face);
+                        mFaceGraphic.updateFace(face);
+                        frameCount = 0;
+                    } else {
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(10);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        frameCount++;
+                    }
                 }
             }
         }
@@ -768,7 +763,9 @@ public final class MainActivity extends AppCompatActivity {
         }
 
         /**
-         * Takes a picture of the current Frame.
+         * Takes a picture of the current Frame and uploads it to the Server.
+         * The Camera is paused and the Image is shown on screen, waiting on the response
+         * of the server.
          *
          * @param face The detected Face with Landmarks
          */
@@ -777,31 +774,11 @@ public final class MainActivity extends AppCompatActivity {
                 @Override
                 public void onPictureTaken(byte[] bytes) {
                     lockPress = true;
-                    /*BitmapFactory.Options opt = new BitmapFactory.Options();
-                    opt.inSampleSize = 2;*/
+
+                    //saves picture byte array to a bitmap
                     Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
 
                     bmp = rotateClockBitmap(bmp, currentOrientation);
-                    //Bitmap grayFace = grayFaceBitmap(bmp, face);
-                    //Log.d("BITMAP", bmp.getWidth() + "x" + bmp.getHeight());
-
-                    //Commented out part is to crop out the face
-                    /*int bitWidth = bmp.getWidth();
-                    int bitHeight = bmp.getHeight();
-                    float pWidth = 480.0f;
-                    float pHeight = 640.0f;
-                    float factorW = bitWidth/pWidth;
-                    float factorH = bitHeight/pHeight;
-
-                    float x = face.getPosition().x * factorW;
-                    float y = face.getPosition().y * factorH;
-                    float fWidth = (face.getPosition().x + face.getWidth())*factorW;
-                    float fHeight = (face.getPosition().y + face.getHeight())*factorH;
-
-                    fWidth = fWidth - x;
-                    fHeight = fHeight - y;
-
-                    Bitmap tmp = Bitmap.createBitmap(bmp, Math.round(x), Math.round(y), Math.round(fWidth), Math.round(fHeight));*/
 
                     new UploadFileToServer(MainActivity.this, mFaceGraphic, face, instanceID).execute(bmp);
 
@@ -815,7 +792,7 @@ public final class MainActivity extends AppCompatActivity {
         }
 
         /**
-         *
+         * Rotates a bitmap in clockwise direction.
          * @param original  Bitmap of a picture taken by the camera.
          * @param degrees   degrees by which the picture is rotated clockwise.
          * @return          rotated bitmap is returned.
@@ -828,12 +805,8 @@ public final class MainActivity extends AppCompatActivity {
                 Matrix matrix = new Matrix();
                 matrix.postRotate(degrees);
 
-                //Bitmap scaledBitmap = Bitmap.createScaledBitmap(original, width, height, true);
                 original = Bitmap.createBitmap(original, 0, 0, width, height, matrix, true);
-            /*Canvas canvas = new Canvas(rotatedBitmap);
-            canvas.drawBitmap(original, 0.0f, 0.0f, null);*/
             }
-
             return original;
         }
     }

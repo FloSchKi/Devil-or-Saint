@@ -1,8 +1,5 @@
 package com.schulz_kittler.florian.devil_or_saint;
 
-/**
- * Created by Schulz on 26.06.2017.
- */
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -19,28 +16,7 @@ import com.google.android.gms.vision.face.Face;
  * graphic overlay view.
  */
 class FaceGraphic extends GraphicOverlay.Graphic {
-    private static final float FACE_POSITION_RADIUS = 10.0f;
-    private static final float ID_TEXT_SIZE = 40.0f;
-    private static final float ID_Y_OFFSET = 50.0f;
-    private static final float ID_X_OFFSET = -50.0f;
-    private static final float BOX_STROKE_WIDTH = 5.0f;
-
-    private static final int COLOR_CHOICES[] = {
-            Color.BLUE,
-            Color.CYAN,
-            Color.GREEN,
-            Color.MAGENTA,
-            Color.RED,
-            Color.WHITE,
-            Color.YELLOW
-    };
-    private static int mCurrentColorIndex = 0;
-
-    private Paint mFacePositionPaint;
-    private Paint mIdPaint;
-    private Paint mBoxPaint;
     private Paint mCreditsPaint;
-
     private volatile Face mFace;
     private Context mainContext;
     private int mFaceId;
@@ -52,26 +28,12 @@ class FaceGraphic extends GraphicOverlay.Graphic {
         super(overlay);
         this.mainContext = mainContext;
 
-        mCurrentColorIndex = (mCurrentColorIndex + 1) % COLOR_CHOICES.length;
-        final int selectedColor = COLOR_CHOICES[mCurrentColorIndex];
-
-        mFacePositionPaint = new Paint();
-        mFacePositionPaint.setColor(selectedColor);
-
-        mIdPaint = new Paint();
-        mIdPaint.setColor(selectedColor);
-        mIdPaint.setTextSize(ID_TEXT_SIZE);
-
         mCreditsPaint = new Paint();
         mCreditsPaint.setColor(Color.RED);
         mCreditsPaint.setTextSize(50.0f);
-
-        mBoxPaint = new Paint();
-        mBoxPaint.setColor(selectedColor);
-        mBoxPaint.setStyle(Paint.Style.STROKE);
-        mBoxPaint.setStrokeWidth(BOX_STROKE_WIDTH);
     }
 
+    // Sets ID of the current face
     void setId(int id) {
         mFaceId = id;
     }
@@ -85,10 +47,18 @@ class FaceGraphic extends GraphicOverlay.Graphic {
      */
     public void setDevilOrSaint(Integer doSCode) { devilOrSaint = doSCode; }
 
+    /**
+     * Sets the credits to draw on screen.
+     * @param cred credits retrieved from the server
+     */
     public void setCredits(Integer cred) {
         credits = cred;
     }
 
+    /**
+     * Sets if the Credits are visible or invisible.
+     * @param visible visibility of the credits
+     */
     public void setCreditsVisible(Boolean visible) {
         cVisible = visible;
     }
@@ -103,7 +73,7 @@ class FaceGraphic extends GraphicOverlay.Graphic {
     }
 
     /**
-     * Draws the face annotations for position on the supplied canvas.
+     * Draws the face filters on the Overlay canvas if enough votes are returned from the server.
      */
     @Override
     public void draw(Canvas canvas) {
@@ -112,10 +82,12 @@ class FaceGraphic extends GraphicOverlay.Graphic {
             return;
         }
 
+        // transforms the x and y position of the face correctly
         float x = scaleX(face.getPosition().x);
         float y = scaleY(face.getPosition().y);
 
-        if(devilOrSaint == 1) { //Devil Face Filter is shown
+        if(devilOrSaint == 1) { // Devil Face Filter is shown
+            // retrieves the position of the left and right eye
             PointF leftEye = new PointF(0,0);
             PointF rightEye = new PointF(0,0);
             for (Landmark landmark : face.getLandmarks()) {
@@ -127,51 +99,39 @@ class FaceGraphic extends GraphicOverlay.Graphic {
                 }
             }
 
+            // calculates the width and height for the devil horns
             float devilWidth = scaleX(leftEye.x) - x;
             float leftEyePadding = (x + scaleX(face.getWidth())) - scaleX(leftEye.x);
             float devilHeight = devilWidth/400*70;
 
+            // specifies the bounding box of the devil horns and where it should be drawn
             int left = Math.round(x + (scaleX(rightEye.x) - x)/2.0f);
             int top = Math.round(y + ((scaleY(leftEye.y) - y)/2.0f) - devilHeight);
             int right = Math.round(scaleX(leftEye.x) + leftEyePadding/2.0f);
             int bottom = Math.round(top + devilHeight*2.0f);
 
+            // draws the devil horn image on the forehead of the provided face
             Drawable devil = mainContext.getDrawable(R.drawable.devil);
             devil.setBounds(left, top, right, bottom);
             devil.draw(canvas);
-        } else if (devilOrSaint == 2) { //Saint Face Filter is shown
-            float haloWidth = scaleX(face.getWidth());
-            //float haloWidth = scaleX(leftEye.x) - scaleX(rightEye.x);
+        } else if (devilOrSaint == 2) { // Saint Face Filter is shown
+            float haloWidth = scaleX(face.getWidth());  // calculates the width of the halo drawn on top of the head
 
-            //int left = Math.round(scaleX(rightEye.x));
+            // specifies the bounding box of the halo and where it should be drawn
             int left = Math.round(x);
             int top = Math.round(y);
             int right = Math.round(left + haloWidth);
             int bottom = Math.round(y + (haloWidth/400*70));
 
+            // draws the halo image over the head
             Drawable halo = mainContext.getDrawable(R.drawable.halo);
             halo.setBounds(left, top, right, bottom);
             halo.draw(canvas);
         }
 
-
+        // checks the visibility of the credits and draws it
         if (cVisible) {
             canvas.drawText("Credits: " + String.valueOf(credits), canvas.getWidth()/2.0f - 100.0f, 50, mCreditsPaint);
         }
-
-        /*canvas.drawCircle(x, y, FACE_POSITION_RADIUS, mFacePositionPaint);
-        canvas.drawText("id: " + mFaceId, x + ID_X_OFFSET, y + ID_Y_OFFSET, mIdPaint);
-        canvas.drawText("happiness: " + Math.round(face.getIsSmilingProbability() * 100) + "%", x - ID_X_OFFSET, y - ID_Y_OFFSET, mIdPaint);
-        canvas.drawText("right eye: " + Math.round(face.getIsRightEyeOpenProbability() * 100) + "%", x + ID_X_OFFSET * 2, y + ID_Y_OFFSET * 2, mIdPaint);
-        canvas.drawText("left eye: " + Math.round(face.getIsLeftEyeOpenProbability() * 100) + "%", x - ID_X_OFFSET*2, y - ID_Y_OFFSET*2, mIdPaint);*/
-
-        // Draws a bounding box around the face.
-        /*float xOffset = scaleX(face.getWidth() / 2.0f);
-        float yOffset = scaleY(face.getHeight() / 2.0f);*/
-        /*float left = x - xOffset;
-        float top = y - yOffset;
-        float right = x + xOffset;
-        float bottom = y + yOffset;*/
-        //canvas.drawRect(left, top, right, bottom, mBoxPaint);
     }
 }

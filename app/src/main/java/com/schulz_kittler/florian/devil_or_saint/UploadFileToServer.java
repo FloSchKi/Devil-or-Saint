@@ -30,9 +30,8 @@ import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Created by Schulz on 12.02.2018.
+ * This AsyncTask is used to send an image to the python server and handle the response accordingly
  */
-
 class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
     private static final String TAG = "UploadFileToServer";
     private Context mainContext;
@@ -48,6 +47,9 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         id = iID;
     }
 
+    /**
+     * Shows a Dialog while the Background task is running
+     */
     @Override
     protected void onPreExecute() {
         mDialog = new ProgressDialog(mainContext);
@@ -55,25 +57,34 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         mDialog.show();
     }
 
+    /**
+     * Converts the image and sends it with the device ID to the server.
+     * The response is passed the onPostExecute.
+     *
+     * @param image the image which is sent to the server
+     * @return the response from the server
+     */
     @Override
     protected String doInBackground(Bitmap... image) {
-        String resultStr = null;
         Bitmap bit = image[0];
 
         try {
-            URL url = new URL("http://schulz.pythonanywhere.com/bafacerec");
+            URL url = new URL("http://schulz.pythonanywhere.com/bafacerec");    // the addresse of the image recognition python server
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Connection", "Keep-Alive");
 
             Log.d(TAG, "**AsyncTask** - MultipartEntity wird erstellt.");
+            // creates a MultiPartEntity
             MultipartEntity entity = new MultipartEntity(
                     HttpMultipartMode.BROWSER_COMPATIBLE);
 
+            // converts the image to a png
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            //bit.compress(Bitmap.CompressFormat.JPEG, 100, bos);
             bit.compress(Bitmap.CompressFormat.PNG, 0, bos);
             byte[] data = bos.toByteArray();
+
+            // sets the names of the image and the ID of the device and adds it to the MultiPartEntity
             ByteArrayBody bab = new ByteArrayBody(data, "face.png");
             entity.addPart("face", bab);
             entity.addPart("iid", new StringBody(id));
@@ -82,12 +93,14 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             conn.addRequestProperty("Content-length", entity.getContentLength() + "");
             conn.addRequestProperty(entity.getContentType().getName(), entity.getContentType().getValue());
 
+            // sends the data to the python server
             OutputStream os = conn.getOutputStream();
             entity.writeTo(conn.getOutputStream());
             Log.d(TAG, "**AsyncTask** - POST wurde gesendet.");
             os.close();
             conn.connect();
 
+            // checks if the no errors occured and reads the response of the server
             if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                 Log.d(TAG, "**AsyncTask** - HTTP_OK");
                 return readStream(conn.getInputStream());
@@ -96,19 +109,19 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
                 return "Error HTTP_CODE";
             }
 
-            /*Scanner sc = new Scanner(conn.getInputStream());
-            resultStr = sc.nextLine();
-
-            sc.close();*/
-
         } catch (Exception e) {
-            e.printStackTrace();
-            // Error during Server connection
+            e.printStackTrace();    // Error during Server connection
         }
-
-        return resultStr;
+        // needed to avoid syntax errors
+        return null;
     }
 
+    /**
+     * Reads the server response and returns the String.
+     *
+     * @param in the InputStream of the response
+     * @return a well formatted String
+     */
     private String readStream(InputStream in) {
         BufferedReader reader = null;
         StringBuilder builder = new StringBuilder();
@@ -132,14 +145,21 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
         return builder.toString();
     }
 
+    /**
+     * Checks the response of the server for errors and sets the face filter, vote and credits of the user.
+     *
+     * @param result the response of the server
+     */
     @Override
     protected void onPostExecute(String result) {
         int dos = 0;
         int vote = 3;
         int credits = 0;
-        boolean error = false;
-        boolean faceError = false;
+        boolean error = false;  // indicates if an error occured
+        boolean faceError = false; // indicates if no face was detected by the server
         String faceID = "";
+
+        // checks the response for errors
         if (result == null) {
             Log.e(TAG, "**AsyncTask/onPostExecute** - Result contained Null");
             error = true;
@@ -152,6 +172,7 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             error = true;
         } else {
             try {
+                // splits the String to retrieve all Informations
                 String[] output = result.split(", ");
                 dos = Integer.parseInt(output[2]);
                 vote = Integer.parseInt(output[1]);
@@ -160,6 +181,8 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
 
                 MainActivity main = (MainActivity) mainContext;
                 main.setButtonVariable(faceID, fGraphic);
+
+                // sets and shows the face filter, credits and vote
                 fGraphic.setDevilOrSaint(dos);
                 fGraphic.setCredits(credits);
                 fGraphic.setCreditsVisible(true);
@@ -169,7 +192,11 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
                 e.printStackTrace();
             }
         }
+
+        // removes the processing Dialog
         mDialog.dismiss();
+
+        // if an error occurred, it is shown to the user and the LifeCycle is restarted
         if(error) {
             if(faceError) {
                 Toast.makeText(mainContext, "Error: Server didn't detect a face! Please try again.", Toast.LENGTH_SHORT).show();
@@ -179,6 +206,6 @@ class UploadFileToServer extends AsyncTask<Bitmap, Void, String> {
             MainActivity main = (MainActivity) mainContext;
             main.restartLifeCycle();
         }
-        Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result); // + ", " + String.valueOf(myNum));
+        Log.d(TAG, "**AsyncTask/onPostExecute** - Antwort erhalten: " + result);
     }
 }
